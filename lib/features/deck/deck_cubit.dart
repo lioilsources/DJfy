@@ -27,6 +27,7 @@ class DeckCubit extends Cubit<DeckState> {
       if (dur == null) return;
       final cfg = state.config.copyWith(duration: dur);
       if (state is DeckReady) emit(DeckReady(cfg));
+      if (state is DeckLoading) emit(DeckLoading(cfg));
     });
     _stateSub = _engine.playerStateStream(deckId).listen((ps) {
       final playing = ps.playing;
@@ -45,8 +46,9 @@ class DeckCubit extends Cubit<DeckState> {
     debugPrint('[Deck $deckId] loading: ${track.soundcloudStreamUrl}');
     try {
       await _engine.loadTrack(deckId, track.soundcloudStreamUrl!);
-      debugPrint('[Deck $deckId] load OK');
-      emit(DeckReady(state.config));
+      final dur = _engine.currentDuration(deckId) ?? Duration.zero;
+      debugPrint('[Deck $deckId] load OK, duration=${dur.inSeconds}s');
+      emit(DeckReady(state.config.copyWith(duration: dur)));
     } catch (e) {
       debugPrint('[Deck $deckId] load FAILED: $e');
       emit(DeckError(loadingConfig, e.toString()));

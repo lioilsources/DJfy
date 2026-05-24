@@ -1,4 +1,3 @@
-import 'dart:math';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -31,7 +30,9 @@ class DeckWidget extends StatelessWidget {
           onAcceptWithDetails: (details) => cubit.loadTrack(details.data),
           builder: (ctx, candidates, rejected) {
             final hovering = candidates.isNotEmpty || isDropTarget;
-            return Container(
+            return ConstrainedBox(
+              constraints: const BoxConstraints(minWidth: 200, minHeight: 300),
+              child: Container(
               margin: const EdgeInsets.all(6),
               decoration: BoxDecoration(
                 color: kCardBg,
@@ -69,6 +70,7 @@ class DeckWidget extends StatelessWidget {
                   _Controls(config: config, cubit: cubit, state: state),
                 ],
               ),
+            ),
             );
           },
         );
@@ -164,24 +166,15 @@ class _VinylArea extends StatelessWidget {
     return LayoutBuilder(
       builder: (ctx, constraints) {
         final size = constraints.maxWidth.clamp(80.0, 200.0);
-        return Center(
-          child: GestureDetector(
-            onPanUpdate: (details) {
-              final center = Offset(size / 2, size / 2);
-              final angle = atan2(
-                details.localPosition.dy - center.dy,
-                details.localPosition.dx - center.dx,
-              );
-              final fraction =
-                  ((angle + pi / 2) / (2 * pi)).clamp(0.0, 1.0);
-              final totalMs = config.duration.inMilliseconds;
-              if (totalMs > 0) {
-                cubit.seekTo(Duration(
-                  milliseconds: (fraction * totalMs).round(),
-                ));
-              }
-            },
-            child: Stack(
+        final totalMs = config.duration.inMilliseconds;
+        final sliderVal = totalMs > 0
+            ? (config.position.inMilliseconds / totalMs).clamp(0.0, 1.0)
+            : 0.0;
+
+        return Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Stack(
               alignment: Alignment.center,
               children: [
                 SizedBox(
@@ -210,7 +203,28 @@ class _VinylArea extends StatelessWidget {
                   ),
               ],
             ),
-          ),
+            // Seek slider
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: SliderTheme(
+                data: SliderTheme.of(context).copyWith(
+                  trackHeight: 2,
+                  thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
+                  overlayShape: const RoundSliderOverlayShape(overlayRadius: 10),
+                ),
+                child: Slider(
+                  value: sliderVal,
+                  min: 0,
+                  max: 1,
+                  onChanged: totalMs > 0
+                      ? (v) => cubit.seekTo(
+                            Duration(milliseconds: (v * totalMs).round()),
+                          )
+                      : null,
+                ),
+              ),
+            ),
+          ],
         );
       },
     );

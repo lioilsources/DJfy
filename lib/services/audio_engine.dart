@@ -45,6 +45,8 @@ class AudioEngine {
   Stream<PlayerState> playerStateStream(int deckId) =>
       playerFor(deckId).playerStateStream;
 
+  Duration? currentDuration(int deckId) => playerFor(deckId).duration;
+
   void dispose(int deckId) {
     _players.remove(deckId)?.dispose();
   }
