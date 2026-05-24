@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DJ Deckify — Mobile DJ App</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0d0d0d;
+      color: #e0e0e0;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+
+    .glow { color: #00e5ff; text-shadow: 0 0 20px #00e5ff88; }
+
+    header {
+      text-align: center;
+      margin-bottom: 3rem;
+    }
+
+    h1 {
+      font-size: clamp(2rem, 6vw, 3.5rem);
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      margin-bottom: 0.5rem;
+    }
+
+    header p {
+      color: #888;
+      font-size: 1.1rem;
+      max-width: 480px;
+    }
+
+    .vinyl {
+      width: 160px;
+      height: 160px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 50% 50%,
+        #2d2d2d 22%, #1a1a1a 22%,
+        #1a1a1a 28%, #222 28%,
+        #222 35%, #1a1a1a 35%,
+        #1a1a1a 42%, #222 42%,
+        #222 49%, #1a1a1a 49%,
+        #1a1a1a 56%, #222 56%,
+        #222 63%, #1a1a1a 63%,
+        #1a1a1a 70%, #111 70%
+      );
+      border: 2px solid #00e5ff44;
+      box-shadow: 0 0 40px #00e5ff22;
+      margin: 0 auto 2.5rem;
+      animation: spin 8s linear infinite;
+      position: relative;
+    }
+
+    .vinyl::after {
+      content: '';
+      position: absolute;
+      inset: 38%;
+      border-radius: 50%;
+      background: #1a1a2e;
+      border: 1px solid #00e5ff33;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .features {
+      display: flex;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+      justify-content: center;
+      max-width: 700px;
+      margin-bottom: 3rem;
+    }
+
+    .feature {
+      background: #1a1a2e;
+      border: 1px solid #00e5ff22;
+      border-radius: 12px;
+      padding: 1.2rem 1.5rem;
+      flex: 1 1 180px;
+      max-width: 220px;
+    }
+
+    .feature-icon { font-size: 1.5rem; margin-bottom: 0.5rem; }
+    .feature h3 { font-size: 0.9rem; font-weight: 700; color: #00e5ff; margin-bottom: 0.3rem; letter-spacing: 0.05em; }
+    .feature p { font-size: 0.8rem; color: #666; line-height: 1.4; }
+
+    .badge {
+      display: inline-block;
+      background: #00e5ff11;
+      border: 1px solid #00e5ff44;
+      border-radius: 6px;
+      padding: 0.2rem 0.6rem;
+      font-size: 0.75rem;
+      color: #00e5ff;
+      margin-bottom: 2rem;
+    }
+
+    footer {
+      margin-top: auto;
+      padding-top: 3rem;
+      text-align: center;
+      font-size: 0.78rem;
+      color: #444;
+      line-height: 2;
+    }
+
+    footer a {
+      color: #666;
+      text-decoration: none;
+    }
+
+    footer a:hover { color: #00e5ff; }
+
+    .separator { margin: 0 0.5rem; }
+  </style>
+</head>
+<body>
+
+  <div class="vinyl"></div>
+
+  <header>
+    <h1><span class="glow">DJ</span> Deckify</h1>
+    <p>Mobilní DJ appka s chytrým playlistem. Last.fm doporučení, BPM metadata, SoundCloud streaming.</p>
+  </header>
+
+  <span class="badge">Flutter · iOS · Android</span>
+
+  <div class="features">
+    <div class="feature">
+      <div class="feature-icon">🎵</div>
+      <h3>Smart Playlist</h3>
+      <p>Zadej kapelu nebo song a appka najde podobné tracky seřazené podle BPM.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">🎛️</div>
+      <h3>Až 6 decků</h3>
+      <p>Přetáhni track na vinyl deck. Seek, speed a volume pro každý deck samostatně.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">🥁</div>
+      <h3>BPM matching</h3>
+      <p>Tracky seřazeny podle proximity BPM k seed songu pro plynulý DJ mix.</p>
+    </div>
+  </div>
+
+  <footer>
+    BPM data powered by <a href="https://getsongbpm.com" target="_blank" rel="noopener">GetSongBPM</a>
+    <span class="separator">·</span>
+    Music discovery via <a href="https://last.fm" target="_blank" rel="noopener">Last.fm</a>
+    <span class="separator">·</span>
+    Streaming via <a href="https://soundcloud.com" target="_blank" rel="noopener">SoundCloud</a>
+    <br>
+    &copy; 2026 DJ Deckify
+  </footer>
+
+</body>
+</html>

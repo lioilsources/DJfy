@@ -1,0 +1,30 @@
+name: dj_deckify
+description: Mobile DJ app with smart playlist powered by Last.fm, GetSongBPM, and SoundCloud.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.4
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  flutter_bloc: ^8.1.4
+  just_audio: ^0.9.36
+  dio: ^5.4.3
+  sqflite: ^2.3.2
+  path_provider: ^2.1.2
+  get_it: ^7.6.7
+  cached_network_image: ^3.3.1
+  path: ^1.9.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  bloc_test: ^9.1.5
+  mocktail: ^1.0.3
+
+flutter:
+  uses-material-design: true
