@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../models/deck_config.dart';
 import '../../models/track.dart';
@@ -39,12 +40,16 @@ class DeckCubit extends Cubit<DeckState> {
       emit(DeckError(state.config, 'Žádný stream URL'));
       return;
     }
-    emit(DeckLoading(state.config.copyWith(track: track)));
+    final loadingConfig = state.config.copyWith(track: track);
+    emit(DeckLoading(loadingConfig));
+    debugPrint('[Deck $deckId] loading: ${track.soundcloudStreamUrl}');
     try {
       await _engine.loadTrack(deckId, track.soundcloudStreamUrl!);
+      debugPrint('[Deck $deckId] load OK');
       emit(DeckReady(state.config));
     } catch (e) {
-      emit(DeckError(state.config, e.toString()));
+      debugPrint('[Deck $deckId] load FAILED: $e');
+      emit(DeckError(loadingConfig, e.toString()));
     }
   }
 

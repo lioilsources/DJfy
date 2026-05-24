@@ -2,16 +2,15 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../models/track.dart';
 import '../../services/lastfm_service.dart';
 import '../../services/bpm_service.dart';
-import '../../services/jamendo_service.dart';
-// import '../../services/soundcloud_service.dart'; // re-enable when approved
+import '../../services/soundcloud_service.dart';
 import 'playlist_state.dart';
 
 class PlaylistCubit extends Cubit<PlaylistState> {
   final LastFmService _lastFm;
   final BpmService _bpm;
-  final JamendoService _jamendo;
+  final SoundCloudService _soundCloud;
 
-  PlaylistCubit(this._lastFm, this._bpm, this._jamendo)
+  PlaylistCubit(this._lastFm, this._bpm, this._soundCloud)
       : super(const PlaylistIdle());
 
   Future<void> search(String query) async {
@@ -68,13 +67,12 @@ class PlaylistCubit extends Cubit<PlaylistState> {
   Future<Track> _enrichTrack(Track track) async {
     final bpm = await _bpm.getBpm(track.artist, track.title);
 
-    final jamendo = await _jamendo.findTrack(track.artist, track.title);
+    final sc = await _soundCloud.findTrack(track.artist, track.title);
 
     return track.copyWith(
       bpm: bpm,
-      artworkUrl: jamendo?.artworkUrl ?? track.artworkUrl,
-      soundcloudStreamUrl: jamendo?.streamUrl,
-      soundcloudPermalinkUrl: jamendo?.permalinkUrl,
+      soundcloudStreamUrl: sc?.streamUrl,
+      soundcloudPermalinkUrl: sc?.permalinkUrl,
     );
   }
 }
