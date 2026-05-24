@@ -8,3 +8,6 @@ const kSoundCloudBaseUrl = 'https://api.soundcloud.com';
 const kGetSongBpmBaseUrl = 'https://api.getsong.co';
 
 const kGetSongBpmBacklinkUrl = 'https://getsongbpm.com';
+
+const kJamendoClientId = String.fromEnvironment('JAMENDO_CLIENT_ID');
+const kJamendoBaseUrl = 'https://api.jamendo.com/v3.0';

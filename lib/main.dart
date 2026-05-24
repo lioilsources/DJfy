@@ -5,6 +5,7 @@ import 'app/app.dart';
 import 'core/cache_service.dart';
 import 'services/audio_engine.dart';
 import 'services/bpm_service.dart';
+import 'services/jamendo_service.dart';
 import 'services/lastfm_service.dart';
 import 'services/soundcloud_service.dart';
 
@@ -26,10 +27,8 @@ Future<void> _setupServices() async {
   GetIt.I
     ..registerSingleton(cache)
     ..registerSingleton(LastFmService(dio))
-    ..registerSingleton(SoundCloudService(dio))
+    ..registerSingleton(JamendoService(dio))
+    ..registerSingleton(SoundCloudService(dio)) // ready for when approved
     ..registerSingleton(BpmService(dio, cache))
     ..registerSingleton(AudioEngine.instance);
-
-  // Authenticate SoundCloud early (non-blocking)
-  GetIt.I<SoundCloudService>().authenticate().ignore();
 }

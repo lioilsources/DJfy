@@ -5,8 +5,8 @@ import '../features/deck/deck_screen.dart';
 import '../features/playlist/playlist_cubit.dart';
 import '../features/playlist/playlist_screen.dart';
 import '../services/bpm_service.dart';
+import '../services/jamendo_service.dart';
 import '../services/lastfm_service.dart';
-import '../services/soundcloud_service.dart';
 import 'theme.dart';
 
 class DjDeckifyApp extends StatelessWidget {
@@ -22,7 +22,7 @@ class DjDeckifyApp extends StatelessWidget {
         create: (_) => PlaylistCubit(
           GetIt.I<LastFmService>(),
           GetIt.I<BpmService>(),
-          GetIt.I<SoundCloudService>(),
+          GetIt.I<JamendoService>(),
         ),
         child: const _HomeScreen(),
       ),
