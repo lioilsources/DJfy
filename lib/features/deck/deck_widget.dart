@@ -9,6 +9,10 @@ import 'deck_cubit.dart';
 import 'deck_state.dart';
 import 'vinyl_painter.dart';
 
+const _kColorDrums = Color(0xFFE53935);
+const _kColorMelody = Color(0xFF43A047);
+const _kColorVocals = Color(0xFF1E88E5);
+
 class DeckWidget extends StatelessWidget {
   final bool isDropTarget;
   final VoidCallback? onClose;
@@ -319,6 +323,7 @@ class _Controls extends StatelessWidget {
             max: 1.0,
             onChanged: cubit.setVolume,
           ),
+          _StemFilterRow(config: config, cubit: cubit),
           if (state is DeckLoading)
             const Padding(
               padding: EdgeInsets.only(top: 4),
@@ -336,6 +341,80 @@ class _Controls extends StatelessWidget {
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+class _StemFilterRow extends StatelessWidget {
+  final DeckConfig config;
+  final DeckCubit cubit;
+
+  const _StemFilterRow({required this.config, required this.cubit});
+
+  static const _stems = [
+    (StemType.drums, 'DRUMS', Icons.music_note, _kColorDrums),
+    (StemType.melody, 'MELODY', Icons.piano, _kColorMelody),
+    (StemType.vocals, 'VOCALS', Icons.mic, _kColorVocals),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = config.hasDsp;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: _stems.map((s) {
+          final (type, label, icon, color) = s;
+          final active = enabled && (config.stemFilters[type] ?? true);
+          return Tooltip(
+            message: enabled ? '' : 'DSP nedostupné (HLS stream)',
+            child: GestureDetector(
+              onTap: enabled ? () => cubit.toggleStem(type) : null,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: active
+                      ? color.withAlpha(50)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: active
+                        ? color
+                        : (enabled ? Colors.white24 : Colors.white12),
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      icon,
+                      size: 12,
+                      color: active
+                          ? color
+                          : (enabled ? Colors.white38 : Colors.white12),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: active
+                            ? color
+                            : (enabled ? Colors.white38 : Colors.white12),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }).toList(),
       ),
     );
   }

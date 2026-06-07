@@ -5,6 +5,7 @@ class Track {
   final String? artworkUrl;
   final String? soundcloudStreamUrl;
   final String? soundcloudPermalinkUrl;
+  final int? scId;
   final int? bpm;
   final List<String> tags;
   final double? similarity;
@@ -16,6 +17,7 @@ class Track {
     this.artworkUrl,
     this.soundcloudStreamUrl,
     this.soundcloudPermalinkUrl,
+    this.scId,
     this.bpm,
     this.tags = const [],
     this.similarity,
@@ -28,6 +30,7 @@ class Track {
     String? artworkUrl,
     String? soundcloudStreamUrl,
     String? soundcloudPermalinkUrl,
+    int? scId,
     int? bpm,
     List<String>? tags,
     double? similarity,
@@ -40,6 +43,7 @@ class Track {
       soundcloudStreamUrl: soundcloudStreamUrl ?? this.soundcloudStreamUrl,
       soundcloudPermalinkUrl:
           soundcloudPermalinkUrl ?? this.soundcloudPermalinkUrl,
+      scId: scId ?? this.scId,
       bpm: bpm ?? this.bpm,
       tags: tags ?? this.tags,
       similarity: similarity ?? this.similarity,

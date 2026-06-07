@@ -1,5 +1,7 @@
 import 'track.dart';
 
+enum StemType { drums, melody, vocals }
+
 class DeckConfig {
   final int id;
   final Track? track;
@@ -8,6 +10,8 @@ class DeckConfig {
   final double volume;
   final Duration position;
   final Duration duration;
+  final Map<StemType, bool> stemFilters;
+  final bool hasDsp; // true = flutter_soloud (DSP available), false = HLS fallback
 
   const DeckConfig({
     required this.id,
@@ -17,6 +21,12 @@ class DeckConfig {
     this.volume = 0.8,
     this.position = Duration.zero,
     this.duration = Duration.zero,
+    this.stemFilters = const {
+      StemType.drums: true,
+      StemType.melody: true,
+      StemType.vocals: true,
+    },
+    this.hasDsp = false,
   });
 
   DeckConfig copyWith({
@@ -26,6 +36,8 @@ class DeckConfig {
     double? volume,
     Duration? position,
     Duration? duration,
+    Map<StemType, bool>? stemFilters,
+    bool? hasDsp,
   }) {
     return DeckConfig(
       id: id,
@@ -35,6 +47,8 @@ class DeckConfig {
       volume: volume ?? this.volume,
       position: position ?? this.position,
       duration: duration ?? this.duration,
+      stemFilters: stemFilters ?? this.stemFilters,
+      hasDsp: hasDsp ?? this.hasDsp,
     );
   }
 }

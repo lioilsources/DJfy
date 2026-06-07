@@ -1,9 +1,13 @@
 import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:get_it/get_it.dart';
+
 import '../../models/deck_config.dart';
 import '../../models/track.dart';
 import '../../services/audio_engine.dart';
+import '../../services/soundcloud_service.dart';
 import 'deck_state.dart';
 
 class DeckCubit extends Cubit<DeckState> {
@@ -44,11 +48,33 @@ class DeckCubit extends Cubit<DeckState> {
     final loadingConfig = state.config.copyWith(track: track);
     emit(DeckLoading(loadingConfig));
     debugPrint('[Deck $deckId] loading: ${track.soundcloudStreamUrl}');
+
+    // Resolve progressive URL in parallel with loading — it's a best-effort
+    // call; failure just means no DSP stem filters on this track.
+    String? progressiveUrl;
     try {
-      await _engine.loadTrack(deckId, track.soundcloudStreamUrl!);
+      final sc = GetIt.I.get<SoundCloudService>();
+      if (track.scId != null) {
+        progressiveUrl =
+            await sc.resolveProgressiveUrl(track.scId!.toString());
+      }
+    } catch (e) {
+      debugPrint('[Deck $deckId] progressive URL resolution failed: $e');
+    }
+
+    try {
+      final hasDsp = await _engine.loadTrack(
+        deckId,
+        track.soundcloudStreamUrl!,
+        progressiveUrl: progressiveUrl,
+      );
+      // Re-subscribe streams — SoLoud decks use different stream sources
+      _cancelStreams();
+      _subscribeStreams();
+
       final dur = _engine.currentDuration(deckId) ?? Duration.zero;
-      debugPrint('[Deck $deckId] load OK, duration=${dur.inSeconds}s');
-      emit(DeckReady(state.config.copyWith(duration: dur)));
+      debugPrint('[Deck $deckId] load OK, hasDsp=$hasDsp, duration=${dur.inSeconds}s');
+      emit(DeckReady(state.config.copyWith(duration: dur, hasDsp: hasDsp)));
     } catch (e) {
       debugPrint('[Deck $deckId] load FAILED: $e');
       emit(DeckError(loadingConfig, e.toString()));
@@ -78,11 +104,25 @@ class DeckCubit extends Cubit<DeckState> {
     emit(DeckReady(state.config.copyWith(volume: volume)));
   }
 
-  @override
-  Future<void> close() {
+  void toggleStem(StemType stem) {
+    if (state is! DeckReady || !state.config.hasDsp) return;
+    final current = state.config.stemFilters[stem] ?? true;
+    final newActive = !current;
+    _engine.setStemActive(deckId, stem, newActive);
+    final newFilters = Map<StemType, bool>.from(state.config.stemFilters)
+      ..[stem] = newActive;
+    emit(DeckReady(state.config.copyWith(stemFilters: newFilters)));
+  }
+
+  void _cancelStreams() {
     _positionSub?.cancel();
     _durationSub?.cancel();
     _stateSub?.cancel();
+  }
+
+  @override
+  Future<void> close() {
+    _cancelStreams();
     _engine.dispose(deckId);
     return super.close();
   }

@@ -73,6 +73,7 @@ class PlaylistCubit extends Cubit<PlaylistState> {
       bpm: bpm,
       soundcloudStreamUrl: sc?.streamUrl,
       soundcloudPermalinkUrl: sc?.permalinkUrl,
+      scId: sc?.scId,
     );
   }
 }

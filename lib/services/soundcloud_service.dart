@@ -87,6 +87,29 @@ class SoundCloudService {
     }
   }
 
+  /// Resolves a direct progressive MP3 CDN URL for the given track ID.
+  ///
+  /// Returns null if SoundCloud doesn't provide a progressive stream
+  /// (older tracks, geo-blocked, etc.). The caller falls back to HLS.
+  Future<String?> resolveProgressiveUrl(String trackId) async {
+    try {
+      await authenticate();
+      final res = await _dio.get(
+        '$kSoundCloudBaseUrl/tracks/$trackId/streams',
+        options: Options(headers: {'Authorization': 'OAuth $_accessToken'}),
+      );
+      final data = res.data as Map<String, dynamic>;
+      final progressiveApiUrl = data['http_mp3_128_url'] as String?;
+      if (progressiveApiUrl == null) return null;
+      final cdnUrl = await _resolveCdnUrl(progressiveApiUrl);
+      debugPrint('[SC] progressive url: ${cdnUrl?.substring(0, 60)}…');
+      return cdnUrl;
+    } catch (e) {
+      debugPrint('[SC] resolveProgressiveUrl FAILED: $e');
+      return null;
+    }
+  }
+
   Future<String?> _resolveCdnUrl(String apiUrl) async {
     try {
       final res = await _dio.get(

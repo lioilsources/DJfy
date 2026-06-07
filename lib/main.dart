@@ -11,6 +11,7 @@ import 'services/soundcloud_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await AudioEngine.initSoLoud();
   await _setupServices();
   runApp(const DjDeckifyApp());
 }
