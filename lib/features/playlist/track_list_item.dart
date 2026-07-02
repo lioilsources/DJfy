@@ -13,9 +13,13 @@ class TrackListItem extends StatelessWidget {
   Widget build(BuildContext context) {
     return Draggable<Track>(
       data: track,
+      dragAnchorStrategy: pointerDragAnchorStrategy,
       feedback: Material(
         color: Colors.transparent,
-        child: _TrackTile(track: track, isSeed: isSeed, isDragging: true),
+        child: SizedBox(
+          width: 320,
+          child: _TrackTile(track: track, isSeed: isSeed, isDragging: true),
+        ),
       ),
       childWhenDragging: Opacity(
         opacity: 0.3,
