@@ -16,21 +16,18 @@ class SoundCloudService {
       return;
     }
     try {
-      final res = await _dio.post(
-        '$kSoundCloudBaseUrl/oauth2/token',
-        data: {
-          'grant_type': 'client_credentials',
-          'client_id': kSoundCloudId,
-          'client_secret': kSoundCloudSecret,
-        },
-        options: Options(contentType: Headers.formUrlEncodedContentType),
+      // Fetch a short-lived token from the NAS token-proxy. The SoundCloud
+      // client secret stays server-side and is never compiled into this app.
+      final res = await _dio.get(
+        '$kTokenProxyUrl/sc/token',
+        options: Options(headers: {'X-Proxy-Key': kProxyApiKey}),
       );
       _accessToken = res.data['access_token'] as String?;
       final expiresIn = (res.data['expires_in'] as num?)?.toInt() ?? 3600;
       _tokenExpiry = DateTime.now().add(Duration(seconds: expiresIn));
-      debugPrint('[SC] auth ok, token: ${_accessToken?.substring(0, 8)}…');
+      debugPrint('[SC] token via proxy ok, token: ${_accessToken?.substring(0, 8)}…');
     } catch (e) {
-      debugPrint('[SC] auth FAILED: $e');
+      debugPrint('[SC] proxy auth FAILED: $e');
       rethrow;
     }
   }

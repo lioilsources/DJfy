@@ -1,0 +1,26 @@
+services:
+  dj-token-proxy:
+    build: .
+    image: dj-token-proxy:latest
+    container_name: dj-token-proxy
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      LISTEN_ADDR: ":8080"
+    ports:
+      # Bind to localhost only; expose TLS via the NAS reverse proxy in front.
+      # Drop the 127.0.0.1 prefix if the app reaches the NAS over a trusted
+      # network (e.g. Tailscale/WireGuard).
+      - "127.0.0.1:8080:8080"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "/dj-token-proxy", "-healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s

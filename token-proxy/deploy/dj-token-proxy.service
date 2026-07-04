@@ -1,0 +1,41 @@
+# Native systemd unit — runs the compiled binary directly (no Docker).
+# Use this on a bare-metal Linux NAS; use docker-compose.yml on a NAS that
+# runs containers (Synology/QNAP/TrueNAS SCALE).
+#
+# Install:
+#   go build -trimpath -ldflags="-s -w" -o /opt/dj-token-proxy/dj-token-proxy .
+#   sudo install -Dm600 .env /etc/dj-token-proxy.env
+#   sudo cp deploy/dj-token-proxy.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now dj-token-proxy
+
+[Unit]
+Description=DJfy SoundCloud token proxy
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/dj-token-proxy
+ExecStart=/opt/dj-token-proxy/dj-token-proxy
+EnvironmentFile=/etc/dj-token-proxy.env
+Restart=on-failure
+RestartSec=5
+
+# Hardening
+DynamicUser=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+[Install]
+WantedBy=multi-user.target
