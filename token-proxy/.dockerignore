@@ -1,0 +1,5 @@
+.env
+*.md
+deploy/
+dj-token-proxy
+.git

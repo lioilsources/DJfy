@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import 'app/app.dart';
 import 'core/cache_service.dart';
+import 'core/env_check.dart';
 import 'services/audio_engine.dart';
 import 'services/bpm_service.dart';
 import 'services/jamendo_service.dart';
@@ -11,6 +12,7 @@ import 'services/soundcloud_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  checkEnv();
   await AudioEngine.initSoLoud();
   await _setupServices();
   runApp(const DjDeckifyApp());

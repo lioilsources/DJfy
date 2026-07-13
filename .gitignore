@@ -12,6 +12,8 @@ build/
 # API keys — never commit
 .env
 *.env
+env.json
+# keep env.example.json tracked as the template
 
 # macOS
 .DS_Store
