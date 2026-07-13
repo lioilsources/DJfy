@@ -43,7 +43,10 @@ lib/
 
 ## Audio
 
-- `just_audio` for playback (cross-platform, OGG/MP3 support)
+- Dual engine (`lib/services/audio_engine.dart`): progressive MP3 → `flutter_soloud` (real-time DSP: EQ kills, FX pad), HLS → `just_audio` fallback (no DSP)
+- SoLoud filters must be activated BEFORE `play()`, and every param call needs `soundHandle:` (otherwise it targets the inactive global chain)
+- SoLoud's 8-band EqFilter uses sqrt-warped FFT bands: band k covers (k/8)²…((k+1)/8)² of Nyquist (band1 = 0–344 Hz @ 44.1 kHz), NOT octave bands
+- Beat grid for Roll/Beatskip/Echo sync: `lib/core/beat_clock.dart` (BPM from GetSongBPM)
 - Tempo/BPM matching for smart playlist ordering
 
 ## Platforms
