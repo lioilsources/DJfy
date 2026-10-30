@@ -403,10 +403,16 @@ class _Controls extends StatelessWidget {
                 constraints:
                     const BoxConstraints(minWidth: 32, minHeight: 32),
               ),
-              const Spacer(),
-              Text(
-                '${config.position.toMmSs()} / ${config.duration.toMmSs()}',
-                style: const TextStyle(color: Colors.white54, fontSize: 10),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '${config.position.toMmSs()} / ${config.duration.toMmSs()}',
+                  style: const TextStyle(color: Colors.white54, fontSize: 10),
+                  textAlign: TextAlign.end,
+                  maxLines: 1,
+                  softWrap: false,
+                  overflow: TextOverflow.fade,
+                ),
               ),
             ],
           ),

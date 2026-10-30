@@ -13,6 +13,11 @@ class DeckScreen extends StatefulWidget {
   State<DeckScreen> createState() => _DeckScreenState();
 }
 
+/// Two decks side by side only fit on tablets/desktop; a phone in portrait
+/// stacks them (the playback row overflowed at ~220 pt per deck).
+@visibleForTesting
+int deckColumns(int decks, double width) => decks <= 1 || width < 600 ? 1 : 2;
+
 class _DeckScreenState extends State<DeckScreen> {
   final List<int> _deckIds = [1];
   int _nextId = 2;
@@ -38,31 +43,33 @@ class _DeckScreenState extends State<DeckScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final crossCount = _deckIds.length <= 1 ? 1 : 2;
     return BlocProvider.value(
       value: _mixer,
       child: Column(
         children: [
           Expanded(
-            child: GridView.builder(
-              padding: const EdgeInsets.all(4),
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: crossCount,
-                childAspectRatio: _deckIds.length <= 2 ? 0.75 : 0.7,
-              ),
-              itemCount: _deckIds.length,
-              itemBuilder: (ctx, i) {
-                final id = _deckIds[i];
-                return BlocProvider(
-                  key: ValueKey(id),
-                  create: (_) => DeckCubit(id, AudioEngine.instance),
-                  child: DeckWidget(
-                    onClose:
-                        _deckIds.length > 1 ? () => _removeDeck(id) : null,
-                  ),
-                );
-              },
-            ),
+            child: LayoutBuilder(builder: (context, constraints) {
+              final crossCount = deckColumns(_deckIds.length, constraints.maxWidth);
+              return GridView.builder(
+                padding: const EdgeInsets.all(4),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: crossCount,
+                  childAspectRatio: _deckIds.length <= 2 ? 0.75 : 0.7,
+                ),
+                itemCount: _deckIds.length,
+                itemBuilder: (ctx, i) {
+                  final id = _deckIds[i];
+                  return BlocProvider(
+                    key: ValueKey(id),
+                    create: (_) => DeckCubit(id, AudioEngine.instance),
+                    child: DeckWidget(
+                      onClose:
+                          _deckIds.length > 1 ? () => _removeDeck(id) : null,
+                    ),
+                  );
+                },
+              );
+            }),
           ),
           if (_deckIds.length >= 2) const _CrossfaderRow(),
           if (_deckIds.length < 6)
