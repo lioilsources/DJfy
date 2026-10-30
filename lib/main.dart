@@ -1,3 +1,4 @@
+import 'package:audio_session/audio_session.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
@@ -12,6 +13,9 @@ import 'services/soundcloud_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Playback category: keep playing with the screen locked (party mode streams
+  // through just_audio, which doesn't configure the iOS audio session itself).
+  await (await AudioSession.instance).configure(const AudioSessionConfiguration.music());
   await AudioEngine.initSoLoud();
   await _setupServices();
   runApp(const DjDeckifyApp());

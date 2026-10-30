@@ -21,6 +21,9 @@ class PartyPlayer {
   static const maxPitch = 0.08;
   static const _tick = Duration(milliseconds: 250);
 
+  /// A stream that isn't playable by then is skipped (dead link, geo-block…).
+  static const loadTimeout = Duration(seconds: 15);
+
   final AudioEngine _engine;
   final SoundCloudService _sc;
 
@@ -93,21 +96,30 @@ class PartyPlayer {
   Future<void> skip() => _advance(force: true);
 
   Future<bool> _load(int deck, Track track) async {
+    final sw = Stopwatch()..start();
     try {
-      final scId = track.scId;
-      if (scId == null) throw StateError('Track has no SoundCloud id');
-      final streams = await _sc.streamsFor(scId);
-      final url = streams.fallback;
-      if (url == null) throw StateError('No stream for "${track.title}"');
-      await _engine.setCrossfadeGain(deck, 0);
-      await _engine.setSpeed(deck, 1);
-      await _engine.loadTrack(deck, url, progressiveUrl: streams.progressive);
+      await _resolveAndLoad(deck, track, sw).timeout(loadTimeout);
+      debugPrint('[Party] "${track.title}" ready in ${sw.elapsedMilliseconds} ms');
       return true;
     } catch (e) {
-      debugPrint('[Party] load failed: $e');
+      debugPrint('[Party] load failed after ${sw.elapsedMilliseconds} ms: $e');
       onFailed(track, e);
       return false;
     }
+  }
+
+  // The party needs no DSP, so it always streams through just_audio:
+  // SoLoud's loadUrl downloads the whole file before the first sample plays.
+  Future<void> _resolveAndLoad(int deck, Track track, Stopwatch sw) async {
+    final scId = track.scId;
+    if (scId == null) throw StateError('Track has no SoundCloud id');
+    final streams = await _sc.streamsFor(scId);
+    debugPrint('[Party] streams for "${track.title}" in ${sw.elapsedMilliseconds} ms');
+    final url = streams.fallback;
+    if (url == null) throw StateError('No stream for "${track.title}"');
+    await _engine.setCrossfadeGain(deck, 0);
+    await _engine.setSpeed(deck, 1);
+    await _engine.loadTrack(deck, url);
   }
 
   void _swapTo(int deck, Track track) {
