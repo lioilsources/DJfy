@@ -239,3 +239,19 @@ func next(t *testing.T, ch <-chan sseEvent) (string, string) {
 		return "", ""
 	}
 }
+
+func TestClientIPBehindCloudflare(t *testing.T) {
+	s := &server{trustProxy: true}
+	r := httptest.NewRequest("POST", "/api/sessions", nil)
+	r.Header.Set("X-Forwarded-For", "6.6.6.6, 203.0.113.7")
+	if got := s.clientIP(r); got != "203.0.113.7" {
+		t.Fatalf("spoofable XFF entry used: %s", got)
+	}
+	r.Header.Set("CF-Connecting-IP", "198.51.100.1")
+	if got := s.clientIP(r); got != "198.51.100.1" {
+		t.Fatalf("got %s", got)
+	}
+	if got := (&server{}).clientIP(r); got != "192.0.2.1" {
+		t.Fatalf("untrusted proxy headers honored: %s", got)
+	}
+}

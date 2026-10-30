@@ -1,7 +1,7 @@
 name: dj_deckify
 description: Mobile DJ app with smart playlist powered by Last.fm, GetSongBPM, and SoundCloud.
 publish_to: 'none'
-version: 1.1.0+1
+version: 1.2.0+1
 
 environment:
   sdk: ^3.11.1
