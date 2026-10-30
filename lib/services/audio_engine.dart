@@ -108,10 +108,12 @@ class AudioEngine {
 
   /// Loads a track onto a deck.
   ///
-  /// If [progressiveUrl] is provided and non-null, the deck is run through
-  /// SoLoud with EQ + FX filters. Otherwise, it falls back to just_audio HLS.
+  /// If [progressiveUrl] is a real progressive MP3, the deck is run through
+  /// SoLoud with EQ + FX filters. Otherwise, or when SoLoud fails, it falls
+  /// back to just_audio on [hlsUrl].
   ///
-  /// Returns true if DSP (SoLoud) was activated, false for HLS fallback.
+  /// Returns true if DSP (SoLoud) was activated, false for the just_audio
+  /// fallback. Throws if the fallback can't load either.
   Future<bool> loadTrack(
     int deckId,
     String hlsUrl, {
@@ -120,21 +122,25 @@ class AudioEngine {
     // Tear down any existing SoLoud state for this deck
     _disposeDsp(deckId);
 
-    if (progressiveUrl != null && progressiveUrl.isNotEmpty) {
-      return _loadViaSoLoud(deckId, progressiveUrl);
-    } else {
-      await _loadViaJustAudio(deckId, hlsUrl);
-      return false;
+    if (progressiveUrl != null && progressiveUrl.isNotEmpty && !isHlsUrl(progressiveUrl)) {
+      if (await _loadViaSoLoud(deckId, progressiveUrl)) return true;
     }
+    await _loadViaJustAudio(deckId, hlsUrl);
+    return false;
   }
+
+  /// SoundCloud's "progressive" CDN URL is sometimes an HLS playlist
+  /// (`…/playlist/…`), which SoLoud can't decode — it hangs instead.
+  static bool isHlsUrl(String url) => url.contains('.m3u8') || url.contains('hls') || url.contains('/playlist');
+
+  static const _soloudLoadTimeout = Duration(seconds: 10);
 
   Future<void> _loadViaJustAudio(int deckId, String url) async {
     final player = playerFor(deckId);
     await player.stop();
     // Detect HLS vs progressive: just_audio handles both, but use the right
     // source type so it doesn't try to parse an MP3 as an HLS playlist.
-    final isHls = url.contains('.m3u8') || url.contains('hls');
-    if (isHls) {
+    if (isHlsUrl(url)) {
       await player.setAudioSource(HlsAudioSource(Uri.parse(url)));
     } else {
       await player.setAudioSource(AudioSource.uri(Uri.parse(url)));
@@ -144,7 +150,13 @@ class AudioEngine {
 
   Future<bool> _loadViaSoLoud(int deckId, String url) async {
     try {
-      final source = await soloud.SoLoud.instance.loadUrl(url);
+      // loadUrl downloads the whole file before returning; don't let a slow
+      // CDN stall the deck — just_audio can stream it instead.
+      final pending = soloud.SoLoud.instance.loadUrl(url);
+      final source = await pending.timeout(_soloudLoadTimeout, onTimeout: () {
+        pending.then(soloud.SoLoud.instance.disposeSource, onError: (_) {});
+        throw TimeoutException('SoLoud loadUrl', _soloudLoadTimeout);
+      });
 
       // Filters must be activated BEFORE play(): filter instances are cloned
       // onto the voice at play time; a later activate() never reaches it.
