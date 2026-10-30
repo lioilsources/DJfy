@@ -7,6 +7,7 @@ import 'services/audio_engine.dart';
 import 'services/bpm_service.dart';
 import 'services/jamendo_service.dart';
 import 'services/lastfm_service.dart';
+import 'services/relay_client.dart';
 import 'services/soundcloud_service.dart';
 
 Future<void> main() async {
@@ -31,5 +32,6 @@ Future<void> _setupServices() async {
     ..registerSingleton(JamendoService(dio))
     ..registerSingleton(SoundCloudService(dio)) // ready for when approved
     ..registerSingleton(BpmService(dio, cache))
-    ..registerSingleton(AudioEngine.instance);
+    ..registerSingleton(AudioEngine.instance)
+    ..registerSingleton(RelayClient());
 }

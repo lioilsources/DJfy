@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0D0D0D">
+  <title>DJfy Party</title>
+  <link rel="icon" href="/static/icon-192.png">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <main id="app">
+    <section class="hero">
+      <img src="/static/icon-192.png" alt="" width="72" height="72">
+      <h1>DJfy Party</h1>
+      <p class="muted">Telefon hostitele je DJ. Reproduktor je jen reproduktor.</p>
+    </section>
+    <form id="go" class="row">
+      <input id="code" maxlength="4" placeholder="Kód party (např. K7QX)" autocapitalize="characters" autocomplete="off">
+      <button class="primary" type="submit">Připojit</button>
+    </form>
+  </main>
+  <script>
+    document.getElementById('go').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const c = document.getElementById('code').value.trim().toUpperCase();
+      if (/^[A-Z0-9]{4}$/.test(c)) location.href = '/j/' + c;
+    });
+  </script>
+</body>
+</html>

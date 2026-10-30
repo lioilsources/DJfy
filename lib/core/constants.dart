@@ -11,3 +11,9 @@ const kGetSongBpmBacklinkUrl = 'https://getsongbpm.com';
 
 const kJamendoClientId = String.fromEnvironment('JAMENDO_CLIENT_ID');
 const kJamendoBaseUrl = 'https://api.jamendo.com/v3.0';
+
+/// DJfy party relay (services/djfy). Guests join at `$kRelayUrl/j/<CODE>`.
+const kRelayUrl = String.fromEnvironment(
+  'DJFY_RELAY_URL',
+  defaultValue: 'https://djfy.ol1n.com',
+);

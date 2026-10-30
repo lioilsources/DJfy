@@ -49,6 +49,14 @@ lib/
 - Beat grid for Roll/Beatskip/Echo sync: `lib/core/beat_clock.dart` (BPM from GetSongBPM)
 - Tempo/BPM matching for smart playlist ordering
 
+## Party mode (Prompts/01-PARTY_PLAN.md)
+
+- Host phone = source of truth (queue, votes, bans, playback); `services/djfy/` Go relay only forwards (SSE down, POST up) and caches the last snapshot. Guest PWA is embedded in the relay (`services/djfy/web/`, plain JS, no build step).
+- `lib/features/party/`: `PartyCubit` (app-level, survives leaving the screen), `PartyPlayer` (engine decks 201/202, separate from manual decks 1–6; Auto-DJ = crossfade + ±8 % beatmatch), `airplay_button.dart` → `djfy/airplay` platform view in `ios/Runner/AppDelegate.swift`.
+- `lib/core/smart_queue.dart`: score = votes × freshness × BPM compatibility × mood lock; pinned entries first.
+- Guests reference tracks only by id from the host's own search results (no injected URLs).
+- Relay URL: `--dart-define=DJFY_RELAY_URL=…` (default `https://djfy.ol1n.com`); relay port 8097 (8095 is taken by webtoon).
+
 ## Platforms
 
 iOS, Android. (Docs list macOS as well — check pubspec for active targets.)
