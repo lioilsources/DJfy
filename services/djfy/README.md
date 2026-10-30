@@ -31,3 +31,9 @@ Host auth = `Authorization: Bearer <hostToken>`. Guest limits per guest id:
 
 Guests only ever send ids (`trackId` from the host's search results, `entryId`
 from the snapshot). Tracks and stream URLs are resolved on the host phone.
+
+## Deploy
+
+`deploy/deploy.sh` (from the Mac) rsyncs the relay to JODA (`~/deploy/DJfy/relay`),
+creates the `djfy` Cloudflare tunnel + DNS for `djfy.ol1n.com` once, and runs
+`docker compose up -d --build` (relay + cloudflared, no published ports).

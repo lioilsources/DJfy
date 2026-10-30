@@ -1,0 +1,34 @@
+# DJfy party relay (JODA), exposed via Cloudflare Tunnel as https://djfy.ol1n.com.
+# No ports are published on the host. Deploy from the Mac: deploy/deploy.sh
+name: djfy
+
+services:
+  djfy-relay:
+    build:
+      context: ..
+    image: djfy-relay:latest
+    container_name: djfy-relay
+    restart: unless-stopped
+    environment:
+      DJFY_ADDR: ":8097"
+      DJFY_TRUST_PROXY: "1"   # cloudflared sets X-Forwarded-For
+    networks:
+      - djfy
+
+  # Credentials (<tunnel-id>.json) + config.yml live in ./cloudflared/ and are
+  # never committed; deploy.sh creates them once.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: djfy-cloudflared
+    restart: unless-stopped
+    command: tunnel --no-autoupdate --config /etc/cloudflared/config.yml run
+    volumes:
+      - ./cloudflared:/etc/cloudflared:ro
+    networks:
+      - djfy
+    depends_on:
+      - djfy-relay
+
+networks:
+  djfy:
+    name: djfy
