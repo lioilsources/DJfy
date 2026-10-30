@@ -104,8 +104,14 @@ func bearer(r *http.Request) string {
 
 func (s *server) clientIP(r *http.Request) string {
 	if s.trustProxy {
+		// Cloudflare overwrites CF-Connecting-IP; X-Forwarded-For only gets
+		// appended to, so its first entry is whatever the client sent.
+		if ip := r.Header.Get("CF-Connecting-IP"); ip != "" {
+			return ip
+		}
 		if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
-			return strings.TrimSpace(strings.Split(fwd, ",")[0])
+			parts := strings.Split(fwd, ",")
+			return strings.TrimSpace(parts[len(parts)-1])
 		}
 	}
 	host, _, err := net.SplitHostPort(r.RemoteAddr)

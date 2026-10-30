@@ -7,7 +7,7 @@ briefly drops offline. It also serves the guest PWA at `/j/<CODE>`.
 
 ```bash
 go test -race ./...
-DJFY_ADDR=:8097 go run .            # DJFY_TRUST_PROXY=1 behind Caddy/nginx (X-Forwarded-For)
+DJFY_ADDR=:8097 go run .            # DJFY_TRUST_PROXY=1 behind Cloudflare (CF-Connecting-IP) or a proxy (X-Forwarded-For)
 ```
 
 Sessions live in memory and are dropped after 12 h idle; a restart ends all parties.

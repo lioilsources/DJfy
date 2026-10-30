@@ -11,7 +11,7 @@ services:
     restart: unless-stopped
     environment:
       DJFY_ADDR: ":8097"
-      DJFY_TRUST_PROXY: "1"   # cloudflared sets X-Forwarded-For
+      DJFY_TRUST_PROXY: "1"   # cloudflared sets CF-Connecting-IP
     networks:
       - djfy
 
