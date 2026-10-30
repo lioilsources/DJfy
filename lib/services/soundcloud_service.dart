@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import '../core/constants.dart';
+import '../models/track.dart';
 
 class SoundCloudService {
   final Dio _dio;
@@ -62,6 +63,45 @@ class SoundCloudService {
       debugPrint('[SC] findTrack FAILED: $e');
       return null;
     }
+  }
+
+  /// Free-text catalog search for the party queue. Returns tracks without
+  /// stream URLs — those are resolved by [streamsFor] only when a track plays,
+  /// since SoundCloud CDN URLs expire.
+  Future<List<Track>> searchTracks(String query, {int limit = 15}) async {
+    await authenticate();
+    try {
+      final res = await _dio.get(
+        '$kSoundCloudBaseUrl/tracks',
+        queryParameters: {'q': query, 'filter': 'streamable', 'limit': limit},
+        options: Options(headers: {'Authorization': 'OAuth $_accessToken'}),
+      );
+      final tracks = (res.data as List? ?? []).cast<Map<String, dynamic>>();
+      return [
+        for (final t in tracks)
+          if (t['id'] is int)
+            Track(
+              id: 'sc:${t['id']}',
+              title: t['title'] as String? ?? '?',
+              artist: (t['user'] as Map?)?['username'] as String? ?? '?',
+              artworkUrl: t['artwork_url'] as String?,
+              soundcloudPermalinkUrl: t['permalink_url'] as String?,
+              scId: t['id'] as int,
+              bpm: (t['bpm'] as num?)?.round(),
+            ),
+      ];
+    } catch (e) {
+      debugPrint('[SC] searchTracks FAILED: $e');
+      return [];
+    }
+  }
+
+  /// Resolves playable URLs for a track: [progressive] (MP3, enables DSP) and
+  /// [fallback] (whatever SoundCloud offers, possibly HLS).
+  Future<({String? progressive, String? fallback})> streamsFor(int scId) async {
+    final progressive = await resolveProgressiveUrl(scId.toString());
+    final fallback = progressive ?? await _getStreamUrl(scId.toString());
+    return (progressive: progressive, fallback: fallback);
   }
 
   Future<String?> _getStreamUrl(String trackId) async {

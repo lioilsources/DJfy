@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0D0D0D">
+  <title>DJfy Party</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/static/icon-192.png">
+  <link rel="apple-touch-icon" href="/static/icon-192.png">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <main id="app">
+    <section id="join" class="screen" hidden>
+      <div class="hero">
+        <img src="/static/icon-192.png" alt="" width="72" height="72">
+        <h1 id="join-title">Party</h1>
+        <p class="muted">Hledej skladby, navrhuj a hlasuj. Bez appky, bez účtu.</p>
+      </div>
+      <form id="join-form">
+        <label for="name">Jak ti říkat?</label>
+        <div class="row">
+          <button type="button" id="emoji" class="emoji" aria-label="Změnit emoji">🎧</button>
+          <input id="name" maxlength="24" autocomplete="nickname" placeholder="Jméno (nepovinné)">
+        </div>
+        <button type="submit" class="primary">Jdu na to</button>
+      </form>
+    </section>
+
+    <section id="party" class="screen" hidden>
+      <header class="top">
+        <div>
+          <div class="eyebrow" id="party-code"></div>
+          <h1 id="party-name">Party</h1>
+        </div>
+        <div id="status" class="status" aria-live="polite"></div>
+      </header>
+
+      <article id="now" class="now">
+        <img id="now-art" alt="" width="64" height="64">
+        <div class="now-meta">
+          <div class="eyebrow">Teď hraje</div>
+          <div id="now-title" class="title">Ticho před bouří</div>
+          <div id="now-sub" class="muted small"></div>
+          <div class="bar"><div id="now-bar"></div></div>
+        </div>
+      </article>
+
+      <nav class="tabs" role="tablist">
+        <button role="tab" data-tab="queue" aria-selected="true">Fronta</button>
+        <button role="tab" data-tab="search" aria-selected="false">Navrhnout</button>
+      </nav>
+
+      <section id="tab-queue" class="tab">
+        <p id="mood" class="pill" hidden></p>
+        <ol id="queue" class="list"></ol>
+        <p id="queue-empty" class="muted center" hidden>Fronta je prázdná – navrhni první skladbu!</p>
+      </section>
+
+      <section id="tab-search" class="tab" hidden>
+        <form id="search-form" class="row">
+          <input id="q" type="search" placeholder="Interpret nebo skladba…" enterkeyhint="search" autocomplete="off">
+          <button class="primary" type="submit">Hledat</button>
+        </form>
+        <p id="search-hint" class="muted small"></p>
+        <ul id="results" class="list"></ul>
+      </section>
+    </section>
+
+    <section id="gone" class="screen center" hidden>
+      <h1 id="gone-title">Party skončila</h1>
+      <p id="gone-text" class="muted">Díky, žes byl(a) u toho.</p>
+    </section>
+  </main>
+  <div id="toast" class="toast" role="status" hidden></div>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>

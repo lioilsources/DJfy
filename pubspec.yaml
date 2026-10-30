@@ -19,6 +19,7 @@ dependencies:
   cached_network_image: ^3.3.1
   path: ^1.9.0
   flutter_soloud: ^3.5.4
+  qr_flutter: ^4.1.0
 
 dev_dependencies:
   flutter_test:
