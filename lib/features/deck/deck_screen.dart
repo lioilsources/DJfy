@@ -1,99 +1,73 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../app/theme.dart';
-import '../../services/audio_engine.dart';
 import '../mixer/mixer_cubit.dart';
-import 'deck_cubit.dart';
+import 'deck_registry.dart';
 import 'deck_widget.dart';
 
-class DeckScreen extends StatefulWidget {
+class DeckScreen extends StatelessWidget {
   const DeckScreen({super.key});
 
   @override
-  State<DeckScreen> createState() => _DeckScreenState();
+  Widget build(BuildContext context) {
+    final registry = context.read<DeckRegistry>();
+    return BlocBuilder<DeckRegistry, DeckListState>(
+      builder: (context, decks) {
+        final ids = decks.ordered;
+        return Column(
+          children: [
+            Expanded(
+              child: LayoutBuilder(builder: (context, constraints) {
+                final crossCount = deckColumns(ids.length, constraints.maxWidth);
+                return GridView.builder(
+                  padding: const EdgeInsets.all(4),
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: crossCount,
+                    childAspectRatio: ids.length <= 2 ? 0.75 : 0.7,
+                  ),
+                  itemCount: ids.length,
+                  itemBuilder: (ctx, i) {
+                    final id = ids[i];
+                    return BlocProvider.value(
+                      key: ValueKey(id),
+                      value: registry.deck(id),
+                      child: DeckWidget(
+                        onClose: ids.length > 1 ? () => registry.remove(id) : null,
+                      ),
+                    );
+                  },
+                );
+              }),
+            ),
+            if (ids.length >= 2) const _CrossfaderRow(),
+            if (ids.length < DeckRegistry.maxDecks)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: TextButton.icon(
+                  onPressed: registry.add,
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('PŘIDAT DECK'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: kNeonCyan,
+                    textStyle: const TextStyle(
+                      letterSpacing: 1.5,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
 }
 
 /// Two decks side by side only fit on tablets/desktop; a phone in portrait
 /// stacks them (the playback row overflowed at ~220 pt per deck).
 @visibleForTesting
 int deckColumns(int decks, double width) => decks <= 1 || width < 600 ? 1 : 2;
-
-class _DeckScreenState extends State<DeckScreen> {
-  final List<int> _deckIds = [1];
-  int _nextId = 2;
-  late final MixerCubit _mixer = MixerCubit(AudioEngine.instance)
-    ..assignDecks(_deckIds);
-
-  void _addDeck() {
-    if (_deckIds.length >= 6) return;
-    setState(() => _deckIds.add(_nextId++));
-    _mixer.assignDecks(_deckIds);
-  }
-
-  void _removeDeck(int id) {
-    setState(() => _deckIds.remove(id));
-    _mixer.assignDecks(_deckIds);
-  }
-
-  @override
-  void dispose() {
-    _mixer.close();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return BlocProvider.value(
-      value: _mixer,
-      child: Column(
-        children: [
-          Expanded(
-            child: LayoutBuilder(builder: (context, constraints) {
-              final crossCount = deckColumns(_deckIds.length, constraints.maxWidth);
-              return GridView.builder(
-                padding: const EdgeInsets.all(4),
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: crossCount,
-                  childAspectRatio: _deckIds.length <= 2 ? 0.75 : 0.7,
-                ),
-                itemCount: _deckIds.length,
-                itemBuilder: (ctx, i) {
-                  final id = _deckIds[i];
-                  return BlocProvider(
-                    key: ValueKey(id),
-                    create: (_) => DeckCubit(id, AudioEngine.instance),
-                    child: DeckWidget(
-                      onClose:
-                          _deckIds.length > 1 ? () => _removeDeck(id) : null,
-                    ),
-                  );
-                },
-              );
-            }),
-          ),
-          if (_deckIds.length >= 2) const _CrossfaderRow(),
-          if (_deckIds.length < 6)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: TextButton.icon(
-                onPressed: _addDeck,
-                icon: const Icon(Icons.add, size: 18),
-                label: const Text('PŘIDAT DECK'),
-                style: TextButton.styleFrom(
-                  foregroundColor: kNeonCyan,
-                  textStyle: const TextStyle(
-                    letterSpacing: 1.5,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12,
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
 
 class _CrossfaderRow extends StatelessWidget {
   const _CrossfaderRow();

@@ -41,6 +41,7 @@ class _DeckWidgetState extends State<DeckWidget> {
             totalMs > 0 ? config.position.inMilliseconds / totalMs : 0.0;
 
         return DragTarget<Track>(
+          onWillAcceptWithDetails: (_) => config.partyRole == null,
           onAcceptWithDetails: (details) => cubit.loadTrack(details.data),
           builder: (ctx, candidates, rejected) {
             final hovering = candidates.isNotEmpty || widget.isDropTarget;
@@ -70,7 +71,7 @@ class _DeckWidgetState extends State<DeckWidget> {
                   _Header(
                     track: track,
                     deckId: cubit.deckId,
-                    onClose: widget.onClose,
+                    onClose: config.partyRole == null ? widget.onClose : null,
                     state: state,
                     showFx: _showFx,
                     onToggleFx: (v) => setState(() => _showFx = v),
@@ -133,11 +134,17 @@ class _Header extends StatelessWidget {
           const SizedBox(width: 6),
           _ModeToggle(showFx: showFx, onChanged: onToggleFx),
           const SizedBox(width: 6),
+          if (state.config.partyRole case final role?) ...[
+            _PartyBadge(role),
+            const SizedBox(width: 6),
+          ],
           Expanded(
             child: Text(
               track != null
                   ? '${track!.artist} — ${track!.title}'
-                  : 'Přetáhni track sem',
+                  : state.config.partyRole == null
+                      ? 'Přetáhni track sem'
+                      : 'Čeká na frontu',
               style: const TextStyle(color: Colors.white70, fontSize: 11),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -168,6 +175,30 @@ class _Header extends StatelessWidget {
               constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
             ),
         ],
+      ),
+    );
+  }
+}
+
+class _PartyBadge extends StatelessWidget {
+  final PartyDeckRole role;
+
+  const _PartyBadge(this.role);
+
+  @override
+  Widget build(BuildContext context) {
+    final live = role == PartyDeckRole.live;
+    final color = live ? kNeonPurple : Colors.white38;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: live ? kNeonPurple.withAlpha(60) : null,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color),
+      ),
+      child: Text(
+        live ? 'PARTY · LIVE' : 'PARTY · NEXT',
+        style: TextStyle(color: live ? Colors.white : color, fontSize: 9, fontWeight: FontWeight.bold),
       ),
     );
   }
@@ -352,7 +383,7 @@ class _Controls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final canPlay = state is DeckReady;
+    final canPlay = state is DeckReady && config.partyRole != PartyDeckRole.next;
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
       child: Column(

@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get_it/get_it.dart';
+import '../features/deck/deck_cubit.dart';
+import '../features/deck/deck_registry.dart';
 import '../features/deck/deck_screen.dart';
+import '../features/mixer/mixer_cubit.dart';
 import '../features/party/party_cubit.dart';
 import '../features/party/party_player.dart';
 import '../features/party/party_screen.dart';
@@ -30,6 +33,15 @@ class DjDeckifyApp extends StatelessWidget {
               GetIt.I<LastFmService>(),
               GetIt.I<BpmService>(),
               GetIt.I<SoundCloudService>(),
+            ),
+          ),
+          // App-level so the party can drive decks and the crossfader, and
+          // a playing deck survives scrolling off screen.
+          BlocProvider(create: (_) => MixerCubit(AudioEngine.instance)),
+          BlocProvider(
+            create: (ctx) => DeckRegistry(
+              (id) => DeckCubit(id, AudioEngine.instance),
+              ctx.read<MixerCubit>(),
             ),
           ),
           // App-level so a running party survives leaving the party screen.
