@@ -21,6 +21,9 @@ class PartyPlayer {
   static const maxPitch = 0.08;
   static const _tick = Duration(milliseconds: 250);
 
+  /// A stream that isn't playable by then is skipped (dead link, geo-block…).
+  static const loadTimeout = Duration(seconds: 15);
+
   final AudioEngine _engine;
   final SoundCloudService _sc;
 
@@ -44,6 +47,10 @@ class PartyPlayer {
   Duration _lastPos = Duration.zero;
   int _stalledTicks = 0;
 
+  /// Bumped by [stop]: async work started before it must not touch the decks
+  /// or fire callbacks once it resumes (the party may have ended meanwhile).
+  int _session = 0;
+
   final _progress = StreamController<({Duration position, Duration duration})>.broadcast();
   Stream<({Duration position, Duration duration})> get progress => _progress.stream;
 
@@ -64,17 +71,18 @@ class PartyPlayer {
 
   /// Hard-starts [track] now (host "play now", or first track of the night).
   Future<bool> playNow(Track track) async {
+    final session = _session;
     _transitioning = true;
     try {
       final deck = _idle;
-      if (!await _load(deck, track)) return false;
+      if (!await _load(deck, track) || session != _session) return false;
       await _engine.pause(_active);
       await _engine.setCrossfadeGain(deck, 1);
       await _engine.play(deck);
       _swapTo(deck, track);
       return true;
     } finally {
-      _transitioning = false;
+      if (session == _session) _transitioning = false;
     }
   }
 
@@ -93,21 +101,33 @@ class PartyPlayer {
   Future<void> skip() => _advance(force: true);
 
   Future<bool> _load(int deck, Track track) async {
+    final session = _session;
+    final sw = Stopwatch()..start();
     try {
-      final scId = track.scId;
-      if (scId == null) throw StateError('Track has no SoundCloud id');
-      final streams = await _sc.streamsFor(scId);
-      final url = streams.fallback;
-      if (url == null) throw StateError('No stream for "${track.title}"');
-      await _engine.setCrossfadeGain(deck, 0);
-      await _engine.setSpeed(deck, 1);
-      await _engine.loadTrack(deck, url, progressiveUrl: streams.progressive);
-      return true;
+      await _resolveAndLoad(deck, track, sw, session).timeout(loadTimeout);
+      debugPrint('[Party] "${track.title}" ready in ${sw.elapsedMilliseconds} ms');
+      return session == _session;
     } catch (e) {
-      debugPrint('[Party] load failed: $e');
+      if (session != _session) return false;
+      debugPrint('[Party] load failed after ${sw.elapsedMilliseconds} ms: $e');
       onFailed(track, e);
       return false;
     }
+  }
+
+  // The party needs no DSP, so it always streams through just_audio:
+  // SoLoud's loadUrl downloads the whole file before the first sample plays.
+  Future<void> _resolveAndLoad(int deck, Track track, Stopwatch sw, int session) async {
+    final scId = track.scId;
+    if (scId == null) throw StateError('Track has no SoundCloud id');
+    final streams = await _sc.streamsFor(scId);
+    if (session != _session) return; // don't recreate a deck stop() disposed
+    debugPrint('[Party] streams for "${track.title}" in ${sw.elapsedMilliseconds} ms');
+    final url = streams.fallback;
+    if (url == null) throw StateError('No stream for "${track.title}"');
+    await _engine.setCrossfadeGain(deck, 0);
+    await _engine.setSpeed(deck, 1);
+    await _engine.loadTrack(deck, url);
   }
 
   void _swapTo(int deck, Track track) {
@@ -139,11 +159,13 @@ class PartyPlayer {
 
   Future<void> _advance({bool force = false}) async {
     if (_transitioning) return;
+    final session = _session;
     _transitioning = true;
     try {
       // Up to 3 tries so one dead stream doesn't stop the party.
       for (var attempt = 0; attempt < 3; attempt++) {
         final next = await onNeedNext();
+        if (session != _session) return;
         if (next == null) {
           if (!force) return;
           await _engine.pause(_active);
@@ -151,7 +173,10 @@ class PartyPlayer {
           return;
         }
         final deck = _idle;
-        if (!await _load(deck, next)) continue;
+        if (!await _load(deck, next)) {
+          if (session != _session) return;
+          continue;
+        }
         if (autoDj && _current != null) {
           await _mix(from: _active, to: deck, fromTrack: _current!, toTrack: next);
         } else {
@@ -163,7 +188,7 @@ class PartyPlayer {
         return;
       }
     } finally {
-      _transitioning = false;
+      if (session == _session) _transitioning = false;
     }
   }
 
@@ -173,9 +198,11 @@ class PartyPlayer {
     required Track fromTrack,
     required Track toTrack,
   }) async {
+    final session = _session;
     final ratio = _tempoRatio(fromTrack.bpm, toTrack.bpm);
     if (ratio != 1) await _engine.setSpeed(to, ratio);
     await _engine.play(to);
+    if (session != _session) return;
     _swapTo(to, toTrack);
 
     const steps = 32;
@@ -185,13 +212,14 @@ class PartyPlayer {
       await _engine.setCrossfadeGain(from, math.cos(x * math.pi / 2));
       await _engine.setCrossfadeGain(to, math.sin(x * math.pi / 2));
       await Future.delayed(stepDur);
+      if (session != _session) return;
     }
     await _engine.pause(from);
 
     // Glide back to the track's own tempo so pitch isn't shifted all song.
     if (ratio != 1) {
       for (var i = 1; i <= 20; i++) {
-        if (_active != to) break;
+        if (_active != to || session != _session) break;
         await _engine.setSpeed(to, ratio + (1 - ratio) * i / 20);
         await Future.delayed(const Duration(milliseconds: 500));
       }
@@ -212,6 +240,8 @@ class PartyPlayer {
   }
 
   Future<void> stop() async {
+    _session++;
+    _transitioning = false;
     _timer?.cancel();
     _timer = null;
     _current = null;

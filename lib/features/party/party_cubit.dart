@@ -309,6 +309,7 @@ class PartyCubit extends Cubit<PartyState> {
   // ── Player callbacks ───────────────────────────────────────────────────────
 
   Future<Track?> _takeNext() async {
+    if (isClosed) return null;
     final next = state.ranked.where((s) => !s.blocked).firstOrNull;
     if (next == null) {
       _starved = state.nowPlaying != null;
@@ -327,6 +328,7 @@ class PartyCubit extends Cubit<PartyState> {
   }
 
   void _onStarted(Track track) {
+    if (isClosed) return;
     final entry = _nextEntry?.track.id == track.id ? _nextEntry : null;
     _nextEntry = null;
     emit(state.copyWith(nowPlaying: track, nowPlayingEntry: entry, isPlaying: true));
