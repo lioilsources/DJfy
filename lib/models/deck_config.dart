@@ -9,6 +9,10 @@ import 'track.dart';
 /// high = bands 4–8 (3.1–22 kHz).
 enum EqBand { low, mid, high }
 
+/// A deck the party has taken over: [live] is on air, [next] gets the upcoming
+/// track. Both are locked against manual loading and closing.
+enum PartyDeckRole { live, next }
+
 class DeckConfig {
   final int id;
   final Track? track;
@@ -23,6 +27,7 @@ class DeckConfig {
   final bool fxActive;
   final double fxX;
   final double fxY;
+  final PartyDeckRole? partyRole;
 
   const DeckConfig({
     required this.id,
@@ -42,6 +47,7 @@ class DeckConfig {
     this.fxActive = false,
     this.fxX = 0.5,
     this.fxY = 0.5,
+    this.partyRole,
   });
 
   DeckConfig copyWith({
@@ -57,6 +63,8 @@ class DeckConfig {
     bool? fxActive,
     double? fxX,
     double? fxY,
+    PartyDeckRole? partyRole,
+    bool clearPartyRole = false,
   }) {
     return DeckConfig(
       id: id,
@@ -72,6 +80,7 @@ class DeckConfig {
       fxActive: fxActive ?? this.fxActive,
       fxX: fxX ?? this.fxX,
       fxY: fxY ?? this.fxY,
+      partyRole: clearPartyRole ? null : (partyRole ?? this.partyRole),
     );
   }
 }

@@ -12,11 +12,7 @@ import '../../services/soundcloud_service.dart';
 import 'party_player.dart';
 import 'party_state.dart';
 
-typedef PartyPlayerFactory = PartyPlayer Function({
-  required Future<Track?> Function() onNeedNext,
-  required void Function(Track) onStarted,
-  required void Function(Track, Object) onFailed,
-});
+typedef PartyPlayerFactory = PartyPlayer Function(PartyPlayerEvents events);
 
 /// The host phone is the party's single source of truth: queue, votes, bans
 /// and playback all live here. The relay only carries messages.
@@ -36,7 +32,6 @@ class PartyCubit extends Cubit<PartyState> {
   Timer? _publishDebounce;
   Timer? _heartbeat;
   int _entrySeq = 0;
-  QueueEntry? _nextEntry;
 
   /// Queue ran dry mid-party: the next added track should start on its own.
   bool _starved = false;
@@ -54,11 +49,19 @@ class PartyCubit extends Cubit<PartyState> {
   })  : _bpm = bpm,
         _now = now ?? DateTime.now,
         super(const PartyState()) {
-    _player = playerFactory(
-      onNeedNext: _takeNext,
+    _player = playerFactory(PartyPlayerEvents(
+      peekNext: _peekNext,
       onStarted: _onStarted,
-      onFailed: (t, e) => _toast('Nejde přehrát „${t.title}“ – přeskakuju'),
-    );
+      onFailed: _onFailed,
+      onSkipped: _dropTrack,
+      onQueueEmpty: () => _toast('Fronta je prázdná'),
+      onEnded: _onEnded,
+      onPlayState: _onPlayState,
+      onLoading: (loading) {
+        if (!isClosed) emit(state.copyWith(loadingNext: loading));
+      },
+      onTransition: _onTransition,
+    ));
   }
 
   PartyPlayer get player => _player;
@@ -70,6 +73,7 @@ class PartyCubit extends Cubit<PartyState> {
     try {
       final s = await _relay.createSession();
       _token = s.token;
+      await _player.prepare();
       emit(state.copyWith(phase: PartyPhase.live, code: s.code, joinUrl: _relay.joinUrl(s.code)));
       _relaySub = _relay
           .hostEvents(s.code, s.token, onConnection: (c) {
@@ -258,11 +262,7 @@ class PartyCubit extends Cubit<PartyState> {
 
   Future<void> playNow(String entryId) async {
     final entry = state.queue.where((e) => e.id == entryId).firstOrNull;
-    if (entry == null) return;
-    _pushHistory();
-    _nextEntry = entry;
-    _updateQueue(state.queue.where((e) => e.id != entryId).toList());
-    await _player.playNow(entry.track);
+    if (entry != null) await _player.playNow(entry.track);
   }
 
   Future<void> ban(String guestId) async {
@@ -297,30 +297,21 @@ class PartyCubit extends Cubit<PartyState> {
   Future<void> skip() => _player.skip();
 
   Future<void> togglePlay() async {
+    if (state.loadingNext) return;
     if (_player.current == null) {
       await _player.skip(); // nothing loaded yet: start the top of the queue
     } else {
       await _player.togglePause();
     }
-    emit(state.copyWith(isPlaying: _player.isPlaying));
-    _schedulePublish();
   }
 
   // ── Player callbacks ───────────────────────────────────────────────────────
 
-  Future<Track?> _takeNext() async {
-    if (isClosed) return null;
-    final next = state.ranked.where((s) => !s.blocked).firstOrNull;
-    if (next == null) {
-      _starved = state.nowPlaying != null;
-      if (_starved) emit(state.copyWith(isPlaying: false));
-      return null;
-    }
-    _pushHistory();
-    _nextEntry = next.entry;
-    _updateQueue(state.queue.where((e) => e.id != next.entry.id).toList());
-    return next.entry.track;
-  }
+  Track? _peekNext(String? excludeId) => state.ranked
+      .where((s) => !s.blocked && s.entry.track.id != excludeId)
+      .firstOrNull
+      ?.entry
+      .track;
 
   void _pushHistory() {
     final cur = state.nowPlaying;
@@ -329,10 +320,48 @@ class PartyCubit extends Cubit<PartyState> {
 
   void _onStarted(Track track) {
     if (isClosed) return;
-    final entry = _nextEntry?.track.id == track.id ? _nextEntry : null;
-    _nextEntry = null;
-    emit(state.copyWith(nowPlaying: track, nowPlayingEntry: entry, isPlaying: true));
+    _starved = false;
+    _pushHistory();
+    final entry = state.queue.where((e) => e.track.id == track.id).firstOrNull;
+    emit(state.copyWith(
+      nowPlaying: track,
+      nowPlayingEntry: entry,
+      clearNowPlayingEntry: entry == null,
+      queue: state.queue.where((e) => e != entry).toList(),
+      isPlaying: true,
+    ));
     _rerank(); // BPM compatibility is relative to the new current track
+  }
+
+  void _onFailed(Track track, Object error) {
+    _dropTrack(track);
+    _toast('Nejde přehrát „${track.title}“ – přeskakuju');
+  }
+
+  void _dropTrack(Track track) {
+    if (isClosed) return;
+    _updateQueue(state.queue.where((e) => e.track.id != track.id).toList());
+  }
+
+  void _onEnded() {
+    if (isClosed) return;
+    _starved = true;
+    _pushHistory();
+    emit(state.copyWith(clearNowPlaying: true, isPlaying: false));
+    _rerank();
+  }
+
+  void _onPlayState(bool playing) {
+    if (isClosed) return;
+    emit(state.copyWith(isPlaying: playing));
+    _schedulePublish();
+  }
+
+  void _onTransition(Track? from, Track? to) {
+    if (isClosed) return;
+    emit(from == null || to == null
+        ? state.copyWith(clearTransition: true)
+        : state.copyWith(transition: (from: from, to: to)));
   }
 
   // ── Ranking & publishing ───────────────────────────────────────────────────

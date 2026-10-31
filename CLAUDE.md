@@ -46,13 +46,14 @@ lib/
 - Dual engine (`lib/services/audio_engine.dart`): progressive MP3 → `flutter_soloud` (real-time DSP: EQ kills, FX pad), HLS → `just_audio` fallback (no DSP)
 - SoLoud filters must be activated BEFORE `play()`, and every param call needs `soundHandle:` (otherwise it targets the inactive global chain)
 - SoLoud's 8-band EqFilter uses sqrt-warped FFT bands: band k covers (k/8)²…((k+1)/8)² of Nyquist (band1 = 0–344 Hz @ 44.1 kHz), NOT octave bands
+- never `await` just_audio's `play()`: it completes when the track ends. `AudioEngine.play` returns right away.
 - Beat grid for Roll/Beatskip/Echo sync: `lib/core/beat_clock.dart` (BPM from GetSongBPM)
 - Tempo/BPM matching for smart playlist ordering
 
 ## Party mode (Prompts/01-PARTY_PLAN.md)
 
 - Host phone = source of truth (queue, votes, bans, playback); `services/djfy/` Go relay only forwards (SSE down, POST up) and caches the last snapshot. Guest PWA is embedded in the relay (`services/djfy/web/`, plain JS, no build step).
-- `lib/features/party/`: `PartyCubit` (app-level, survives leaving the screen), `PartyPlayer` (engine decks 201/202, separate from manual decks 1–6; Auto-DJ = crossfade + ±8 % beatmatch), `airplay_button.dart` → `djfy/airplay` platform view in `ios/Runner/AppDelegate.swift`.
+- `lib/features/party/`: `PartyCubit` (app-level, survives leaving the screen), `PartyPlayer` (plays on decks 1/2 from `DeckRegistry`, which alternate; streaming via just_audio; every track change goes through one cancellable `_transition`; the queue only changes once a track is on air; Auto-DJ = moving the real crossfader + ±8 % beatmatch), `airplay_button.dart` → `djfy/airplay` platform view in `ios/Runner/AppDelegate.swift`.
 - `lib/core/smart_queue.dart`: score = votes × freshness × BPM compatibility × mood lock; pinned entries first.
 - Guests reference tracks only by id from the host's own search results (no injected URLs).
 - Relay URL: `--dart-define=DJFY_RELAY_URL=…` (default `https://djfy.ol1n.com`); relay port 8097 (8095 is taken by webtoon).

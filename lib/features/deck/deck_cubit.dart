@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get_it/get_it.dart';
+import 'package:just_audio/just_audio.dart' show ProcessingState;
 
 import '../../core/beat_clock.dart';
 import '../../models/deck_config.dart';
@@ -16,10 +17,20 @@ import 'deck_state.dart';
 class DeckCubit extends Cubit<DeckState> {
   final int deckId;
   final AudioEngine _engine;
+  final SoundCloudService? _sc;
   final BeatClock _beatClock = BeatClock();
   StreamSubscription? _positionSub;
   StreamSubscription? _durationSub;
   StreamSubscription? _stateSub;
+
+  /// Bumped by every load and [eject]; superseded loads must not touch state.
+  int _loadGen = 0;
+
+  final _completed = StreamController<void>.broadcast();
+  bool _atEnd = false;
+
+  /// Fires once each time the loaded track plays to its end.
+  Stream<void> get completed => _completed.stream;
 
   // Roll state: while held, we keep re-seeking to _rollAnchor every slice,
   // and track where playback *would* be so release stays on the phrase grid.
@@ -41,10 +52,13 @@ class DeckCubit extends Cubit<DeckState> {
   /// One full revolution of the jog wheel = 1.8 s of track (33⅓ RPM vinyl).
   static const jogSecondsPerRevolution = 1.8;
 
-  DeckCubit(this.deckId, this._engine)
-      : super(DeckIdle(DeckConfig(id: deckId))) {
+  DeckCubit(this.deckId, this._engine, {SoundCloudService? soundCloud})
+      : _sc = soundCloud,
+        super(DeckIdle(DeckConfig(id: deckId))) {
     _subscribeStreams();
   }
+
+  SoundCloudService get _soundCloud => _sc ?? GetIt.I.get<SoundCloudService>();
 
   void _subscribeStreams() {
     _positionSub = _engine.positionStream(deckId).listen((pos) {
@@ -60,6 +74,9 @@ class DeckCubit extends Cubit<DeckState> {
     });
     _stateSub = _engine.playerStateStream(deckId).listen((ps) {
       final playing = ps.playing;
+      final atEnd = ps.processingState == ProcessingState.completed;
+      if (atEnd && !_atEnd) _completed.add(null);
+      _atEnd = atEnd;
       _beatClock
         ..playing = playing
         ..anchor(_engine.positionSync(deckId));
@@ -68,35 +85,45 @@ class DeckCubit extends Cubit<DeckState> {
     });
   }
 
-  Future<void> loadTrack(Track track) async {
-    if (track.soundcloudStreamUrl == null) {
+  /// Loads [track] onto the deck.
+  ///
+  /// [streaming] resolves the stream from the track's SoundCloud id and plays
+  /// it through just_audio: it starts fast but has no DSP, and failures are
+  /// rethrown so the caller can move on. Without it, failures only show on the
+  /// deck. A newer load or [eject] silently supersedes this one.
+  Future<void> loadTrack(Track track, {bool streaming = false}) async {
+    if (!streaming && track.soundcloudStreamUrl == null) {
       emit(DeckError(state.config, 'Žádný stream URL'));
       return;
     }
+    final gen = ++_loadGen;
     _endFxGesture();
-    final loadingConfig = state.config.copyWith(track: track);
+    final loadingConfig = state.config.copyWith(
+      track: track,
+      isPlaying: false,
+      position: Duration.zero,
+      duration: Duration.zero,
+    );
     emit(DeckLoading(loadingConfig));
-    debugPrint('[Deck $deckId] loading: ${track.soundcloudStreamUrl}');
+    _atEnd = false;
+    debugPrint('[Deck $deckId] loading: ${track.title}');
 
-    // Resolve progressive URL in parallel with loading — it's a best-effort
-    // call; failure just means no DSP EQ/FX on this track.
-    String? progressiveUrl;
     try {
-      final sc = GetIt.I.get<SoundCloudService>();
-      if (track.scId != null) {
-        progressiveUrl =
-            await sc.resolveProgressiveUrl(track.scId!.toString());
+      // A DSP-enabled party mode only has to pass streams.progressive below.
+      final String url;
+      String? progressiveUrl;
+      if (streaming) {
+        final streams = await _soundCloud.streamsFor(track.scId ?? (throw StateError('Track has no SoundCloud id')));
+        if (gen != _loadGen || isClosed) return;
+        url = streams.fallback ?? (throw StateError('No stream for "${track.title}"'));
+      } else {
+        url = track.soundcloudStreamUrl!;
+        progressiveUrl = await _resolveProgressive(track);
+        if (gen != _loadGen || isClosed) return;
       }
-    } catch (e) {
-      debugPrint('[Deck $deckId] progressive URL resolution failed: $e');
-    }
 
-    try {
-      final hasDsp = await _engine.loadTrack(
-        deckId,
-        track.soundcloudStreamUrl!,
-        progressiveUrl: progressiveUrl,
-      );
+      final hasDsp = await _engine.loadTrack(deckId, url, progressiveUrl: progressiveUrl);
+      if (gen != _loadGen || isClosed) return;
       // Re-subscribe streams — SoLoud decks use different stream sources
       _cancelStreams();
       _subscribeStreams();
@@ -111,9 +138,49 @@ class DeckCubit extends Cubit<DeckState> {
       debugPrint('[Deck $deckId] load OK, hasDsp=$hasDsp, duration=${dur.inSeconds}s');
       emit(DeckReady(state.config.copyWith(duration: dur, hasDsp: hasDsp)));
     } catch (e) {
+      if (gen != _loadGen || isClosed) return;
       debugPrint('[Deck $deckId] load FAILED: $e');
-      emit(DeckError(loadingConfig, e.toString()));
+      emit(DeckError(state.config, e.toString()));
+      if (streaming) rethrow;
     }
+  }
+
+  // Best-effort: failure just means no DSP EQ/FX on this track.
+  Future<String?> _resolveProgressive(Track track) async {
+    try {
+      if (track.scId == null) return null;
+      return await _soundCloud.resolveProgressiveUrl(track.scId!.toString());
+    } catch (e) {
+      debugPrint('[Deck $deckId] progressive URL resolution failed: $e');
+      return null;
+    }
+  }
+
+  Future<void> play() => _engine.play(deckId);
+
+  Future<void> pause() => _engine.pause(deckId);
+
+  /// Stops the deck and empties it, cancelling a load in progress.
+  Future<void> eject() async {
+    final gen = ++_loadGen;
+    _atEnd = false;
+    await _engine.stop(deckId);
+    if (gen != _loadGen || isClosed) return;
+    _cancelStreams();
+    _subscribeStreams();
+    final c = state.config;
+    emit(DeckIdle(DeckConfig(id: deckId, volume: c.volume, partyRole: c.partyRole)));
+  }
+
+  /// Party takeover: changes the deck's role without touching its playback.
+  void setPartyRole(PartyDeckRole? role) {
+    final c = state.config.copyWith(partyRole: role, clearPartyRole: role == null);
+    emit(switch (state) {
+      DeckIdle() => DeckIdle(c),
+      DeckLoading() => DeckLoading(c),
+      DeckReady() => DeckReady(c),
+      DeckError(:final message) => DeckError(c, message),
+    });
   }
 
   Future<void> togglePlayPause() async {
@@ -132,6 +199,7 @@ class DeckCubit extends Cubit<DeckState> {
 
   Future<void> setSpeed(double speed) async {
     await _engine.setSpeed(deckId, speed);
+    if (isClosed) return;
     _beatClock
       ..anchor(_engine.positionSync(deckId))
       ..speed = speed;
@@ -345,6 +413,7 @@ class DeckCubit extends Cubit<DeckState> {
     _rollTimer?.cancel();
     _rollStopwatch = null;
     _cancelStreams();
+    _completed.close();
     _engine.dispose(deckId);
     return super.close();
   }

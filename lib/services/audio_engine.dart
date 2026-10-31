@@ -198,13 +198,18 @@ class AudioEngine {
 
   // ── Playback ─────────────────────────────────────────────────────────────
 
+  /// Starts playback and returns right away. just_audio's own `play()` future
+  /// only completes when the track ends or is paused, so awaiting it would
+  /// stall the caller for the whole song.
   Future<void> play(int deckId) async {
     final dsp = _dsp[deckId];
     if (dsp != null) {
       soloud.SoLoud.instance.setPause(dsp.handle, false);
       _emitState(deckId, playing: true);
     } else {
-      await playerFor(deckId).play();
+      unawaited(playerFor(deckId).play().catchError((Object e) {
+        debugPrint('[AudioEngine] deck $deckId play failed: $e');
+      }));
     }
   }
 
@@ -216,6 +221,12 @@ class AudioEngine {
     } else {
       await playerFor(deckId).pause();
     }
+  }
+
+  /// Stops the deck and drops its loaded track, keeping the player for reuse.
+  Future<void> stop(int deckId) async {
+    _disposeDsp(deckId);
+    await playerFor(deckId).stop();
   }
 
   Future<void> seekTo(int deckId, Duration position) async {
@@ -475,18 +486,18 @@ class AudioEngine {
       // Detect natural end-of-track
       final isValid = soloud.SoLoud.instance.getIsValidVoiceHandle(dsp.handle);
       if (!isValid) {
-        _emitState(deckId, playing: false);
+        _emitState(deckId, playing: false, completed: true);
         _timers[deckId]?.cancel();
         _timers.remove(deckId);
       }
     });
   }
 
-  void _emitState(int deckId, {required bool playing}) {
+  void _emitState(int deckId, {required bool playing, bool completed = false}) {
     _ensureStateCtrl(deckId).add(
       PlayerState(
         playing,
-        playing ? ProcessingState.ready : ProcessingState.ready,
+        completed ? ProcessingState.completed : ProcessingState.ready,
       ),
     );
   }
