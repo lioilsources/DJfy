@@ -192,17 +192,15 @@ něj jen dívá.
 7. Zamčený telefon, AirPlay na Sonos. 8. Ukončení během načítání → ticho, decky
    odemčené.
 
-## Poznámky a rozhodnutí k potvrzení s uživatelem
+## Rozhodnutí uživatele (2026-10-31, závazná)
 
-- **DSP pro party (SoLoud) ne teď.** SoLoud stahuje celý MP3 před prvním vzorkem;
-  s preloadem by to na druhou a další skladbu stačilo, první by čekala na stažení
-  (~4 MB; na špatné síti 10–30 s). Navrhuju přepínač „DJ režim (EQ/FX, stahuje
-  skladby)“ jako navazující práci, výchozí zůstane streaming.
-- **Střídání A/B vs. „hraje vždy deck 1“.** Přenést zvuk z decku 2 na deck 1 bez
-  výpadku nejde; řazení „hrající první“ dává stejný vizuální výsledek. Pokud by
-  uživatel trval na pevném čísle, alternativa je přejmenovat decky v party režimu na
-  `LIVE`/`NEXT` místo čísel.
-- **Co s rozjetou manuální skladbou na decku 1/2 při startu party?** Návrh: party ji
-  nechá dohrát jako „current“ (přidá ji do `nowPlaying`), první skladba fronty se
-  načte na druhý deck. Jednodušší varianta: při startu party decky 1/2 zastavit.
-  Zvolit a napsat do commit message.
+- **DSP pro party (SoLoud) teď ne, ale v budoucnu ano.** Výchozí zůstává streaming
+  přes just_audio. SoLoud stahuje celý MP3 před prvním vzorkem; s preloadem by to na
+  druhou a další skladbu stačilo, první by čekala na stažení (~4 MB; na špatné síti
+  10–30 s). Navazující práce: přepínač „DJ režim (EQ/FX, stahuje skladby)“. Návrh
+  decků a `DeckCubit.loadTrack(streaming:)` udělej tak, aby přepnutí na SoLoud s
+  preloadem bylo jen o volbě cesty v loadu, ne o další přestavbě.
+- **Decky A/B se střídají.** UI řadí hrající deck první se štítky `PARTY · LIVE` /
+  `PARTY · NEXT`. Zvuk se mezi decky nepřenáší.
+- **Při startu party se decky 1 a 2 zastaví** a cokoli na nich bylo se zahodí
+  (`stop` + zámek). Žádné „dohrát jako current“.
