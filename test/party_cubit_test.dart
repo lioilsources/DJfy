@@ -20,8 +20,7 @@ void main() {
   late _Sc sc;
   late _Player player;
   late PartyCubit cubit;
-  late Future<Track?> Function() needNext;
-  late void Function(Track) started;
+  late PartyPlayerEvents events;
   final sent = <Map<String, dynamic>>[];
 
   setUp(() async {
@@ -40,6 +39,7 @@ void main() {
     when(() => relay.ban(any(), any(), any())).thenAnswer((_) async {});
     when(() => relay.endSession(any(), any())).thenAnswer((_) async {});
     when(() => sc.searchTracks(any(), limit: any(named: 'limit'))).thenAnswer((_) async => [t1, t2]);
+    when(() => player.prepare()).thenAnswer((_) async {});
     when(() => player.stop()).thenAnswer((_) async {});
     when(() => player.dispose()).thenAnswer((_) async {});
     when(() => player.skip()).thenAnswer((_) async {});
@@ -47,9 +47,8 @@ void main() {
     when(() => player.position).thenReturn(Duration.zero);
     when(() => player.duration).thenReturn(Duration.zero);
 
-    cubit = PartyCubit(relay, sc, playerFactory: ({required onNeedNext, required onStarted, required onFailed}) {
-      needNext = onNeedNext;
-      started = onStarted;
+    cubit = PartyCubit(relay, sc, playerFactory: (e) {
+      events = e;
       return player;
     });
     await cubit.start('Chata');
@@ -120,9 +119,10 @@ void main() {
     await cubit.addTrack(t2);
     final id2 = cubit.state.queue.last.id;
     cubit.pin(id2);
-    final next = await needNext();
+    final next = events.peekNext(null);
     expect(next, t2);
-    started(next!);
+    expect(cubit.state.queue, hasLength(2), reason: 'peeking must not consume');
+    events.onStarted(next!);
     final snap = cubit.buildSnapshot();
     expect((snap['nowPlaying'] as Map)['title'], 'Two');
     expect((snap['queue'] as List).single['track']['id'], 'sc:1');

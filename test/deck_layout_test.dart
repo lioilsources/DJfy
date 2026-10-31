@@ -1,14 +1,18 @@
 import 'package:bloc_test/bloc_test.dart';
 import 'package:dj_deckify/features/deck/deck_cubit.dart';
+import 'package:dj_deckify/features/deck/deck_registry.dart';
 import 'package:dj_deckify/features/deck/deck_screen.dart';
 import 'package:dj_deckify/features/deck/deck_state.dart';
 import 'package:dj_deckify/features/deck/deck_widget.dart';
+import 'package:dj_deckify/features/mixer/mixer_cubit.dart';
 import 'package:dj_deckify/models/deck_config.dart';
 import 'package:dj_deckify/models/track.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+
+import 'support/fake_audio_engine.dart';
 
 class _Deck extends MockCubit<DeckState> implements DeckCubit {}
 
@@ -46,6 +50,35 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+
+  testWidgets('during a party the live deck comes first, labelled and locked', (tester) async {
+    final engine = FakeAudioEngine();
+    final mixer = MixerCubit(engine);
+    final decks = DeckRegistry((id) => DeckCubit(id, engine), mixer)..ensureFirst(const [1, 2]);
+    addTearDown(decks.close);
+    addTearDown(mixer.close);
+    decks.deck(1).setPartyRole(PartyDeckRole.next);
+    decks.deck(2).setPartyRole(PartyDeckRole.live);
+    decks.setLive(2);
+
+    tester.view.physicalSize = const Size(1080, 2340);
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: MultiBlocProvider(
+          providers: [BlocProvider.value(value: mixer), BlocProvider.value(value: decks)],
+          child: const DeckScreen(),
+        ),
+      ),
+    ));
+
+    expect(tester.takeException(), isNull);
+    expect(decks.state.ordered, [2, 1]);
+    expect(find.text('DECK 2'), findsOneWidget);
+    expect(find.text('PARTY · LIVE'), findsOneWidget);
+    expect(find.byIcon(Icons.close), findsNothing);
+  });
 
   test('two decks sit side by side only on wide screens', () {
     expect(deckColumns(1, 1200), 1);

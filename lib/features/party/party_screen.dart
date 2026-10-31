@@ -8,6 +8,8 @@ import '../../app/theme.dart';
 import '../../core/smart_queue.dart';
 import '../../models/party.dart';
 import '../../models/track.dart';
+import '../deck/deck_cubit.dart';
+import '../deck/deck_state.dart';
 import 'airplay_button.dart';
 import 'party_cubit.dart';
 import 'party_state.dart';
@@ -227,7 +229,10 @@ class _NowPlayingCard extends StatelessWidget {
     return BlocBuilder<PartyCubit, PartyState>(
       buildWhen: (a, b) =>
           a.nowPlaying != b.nowPlaying ||
+          a.nowPlayingEntry != b.nowPlayingEntry ||
           a.isPlaying != b.isPlaying ||
+          a.loadingNext != b.loadingNext ||
+          a.transition != b.transition ||
           a.autoDj != b.autoDj ||
           a.moodLock != b.moodLock ||
           a.queue.isEmpty != b.queue.isEmpty,
@@ -262,6 +267,13 @@ class _NowPlayingCard extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(color: Colors.white54, fontSize: 12),
                         ),
+                        if (s.transition case final tr?)
+                          Text(
+                            '${tr.from.title} → ${tr.to.title}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(color: kNeonPurple, fontSize: 11),
+                          ),
                       ],
                     ),
                   ),
@@ -270,18 +282,20 @@ class _NowPlayingCard extends StatelessWidget {
                     onPressed: t == null && s.queue.isEmpty ? null : cubit.togglePlay,
                   ),
                   IconButton(
-                    icon: const Icon(Icons.skip_next),
-                    onPressed: t == null ? null : cubit.skip,
+                    icon: s.loadingNext
+                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.skip_next),
+                    onPressed: t == null && !s.loadingNext ? null : cubit.skip,
                   ),
                 ],
               ),
-              StreamBuilder<({Duration position, Duration duration})>(
-                stream: cubit.player.progress,
-                builder: (context, snap) {
-                  final p = snap.data;
-                  final v = p == null || p.duration.inMilliseconds == 0
+              BlocBuilder<DeckCubit, DeckState>(
+                bloc: cubit.player.liveDeck,
+                builder: (context, deck) {
+                  final total = deck.config.duration.inMilliseconds;
+                  final v = t == null || total == 0
                       ? 0.0
-                      : (p.position.inMilliseconds / p.duration.inMilliseconds).clamp(0.0, 1.0);
+                      : (deck.config.position.inMilliseconds / total).clamp(0.0, 1.0);
                   return LinearProgressIndicator(
                     value: v,
                     minHeight: 2,
