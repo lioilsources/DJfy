@@ -2,10 +2,12 @@ import 'package:dj_deckify/features/deck/deck_cubit.dart';
 import 'package:dj_deckify/features/deck/deck_registry.dart';
 import 'package:dj_deckify/features/deck/deck_state.dart';
 import 'package:dj_deckify/features/mixer/mixer_cubit.dart';
+import 'package:dj_deckify/features/party/auto_picker.dart';
 import 'package:dj_deckify/features/party/party_cubit.dart';
 import 'package:dj_deckify/features/party/party_player.dart';
 import 'package:dj_deckify/models/deck_config.dart';
 import 'package:dj_deckify/models/track.dart';
+import 'package:dj_deckify/services/lastfm_service.dart';
 import 'package:dj_deckify/services/relay_client.dart';
 import 'package:dj_deckify/services/soundcloud_service.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -16,6 +18,8 @@ import 'support/fake_audio_engine.dart';
 class _Relay extends Mock implements RelayClient {}
 
 class _Sc extends Mock implements SoundCloudService {}
+
+class _LastFm extends Mock implements LastFmService {}
 
 const t1 = Track(id: 'sc:1', title: 'One', artist: 'A', scId: 1);
 const t2 = Track(id: 'sc:2', title: 'Two', artist: 'B', scId: 2);
@@ -296,6 +300,103 @@ void main() {
     await settle();
     expect(cubit.state.isPlaying, isTrue);
     expect(engine.playing, hasLength(1));
+  });
+
+  group('endless party', () {
+    const similar = Track(id: 'A-Similar', title: 'Similar', artist: 'Other', similarity: 1);
+    const found = Track(id: 'sc:7', title: 'Other - Similar', artist: 'label', scId: 7);
+    late _LastFm lastFm;
+
+    /// The cubit from setUp has no picker; replace it with one that has.
+    Future<void> startWithPicker() async {
+      await cubit.close();
+      lastFm = _LastFm();
+      when(() => lastFm.getSimilarTracks(any(), any(), limit: any(named: 'limit')))
+          .thenAnswer((_) async => [similar]);
+      when(() => lastFm.getSimilarArtistTracks(any(), limit: any(named: 'limit'))).thenAnswer((_) async => []);
+      when(() => sc.searchTracks(any(), limit: any(named: 'limit'))).thenAnswer((_) async => [found]);
+      final mixer = MixerCubit(engine);
+      cubit = PartyCubit(relay, sc, picker: AutoPicker(lastFm, sc), playerFactory: (events) {
+        return player = PartyPlayer(decks, mixer, events)
+          ..crossfade = const Duration(milliseconds: 400)
+          ..cutFade = const Duration(milliseconds: 100);
+      });
+      await cubit.start('Chata');
+    }
+
+    test('near the end of the last track one auto track joins the queue and plays', () async {
+      await startWithPicker();
+      await cubit.addTrack(t1);
+      await cubit.togglePlay();
+      await settle();
+      expect(cubit.state.queue, isEmpty); // plenty of time: nothing picked yet
+
+      engine.seek(player.liveDeck.deckId, engine.trackLength - const Duration(seconds: 80));
+      await settle();
+      expect(cubit.state.queue.single.track, found);
+      expect(cubit.state.queue.single.isAuto, isTrue);
+
+      engine.finish(player.liveDeck.deckId);
+      await settle();
+      expect(cubit.state.nowPlaying, found);
+      expect(engine.heard, 'https://cdn.test/7.mp3');
+    });
+
+    test('Next on an empty queue picks a track and plays it', () async {
+      await startWithPicker();
+      await cubit.addTrack(t1);
+      await cubit.togglePlay();
+      await settle();
+
+      await cubit.skip();
+      await settle();
+      await wait(150);
+
+      expect(cubit.state.nowPlaying, found);
+      expect(cubit.state.isPlaying, isTrue);
+    });
+
+    test('a vetoed auto track is not picked again', () async {
+      await startWithPicker();
+      await cubit.addTrack(t1);
+      await cubit.togglePlay();
+      await settle();
+      engine.seek(player.liveDeck.deckId, engine.trackLength - const Duration(seconds: 80));
+      await settle();
+
+      cubit.veto(cubit.state.queue.single.id);
+      engine.seek(player.liveDeck.deckId, engine.trackLength - const Duration(seconds: 79));
+      await settle();
+
+      expect(cubit.state.queue, isEmpty);
+    });
+
+    test('switched off, the party ends with the queue', () async {
+      await startWithPicker();
+      cubit.setEndless(false);
+      await cubit.addTrack(t1);
+      await cubit.togglePlay();
+      await settle();
+
+      engine.finish(player.liveDeck.deckId);
+      await settle();
+
+      expect(cubit.state.nowPlaying, isNull);
+      expect(cubit.state.queue, isEmpty);
+    });
+
+    test('a pick landing after end() adds nothing', () async {
+      await startWithPicker();
+      await cubit.addTrack(t1);
+      await cubit.togglePlay();
+      await settle();
+
+      engine.seek(player.liveDeck.deckId, engine.trackLength - const Duration(seconds: 80));
+      await cubit.end();
+      await settle();
+
+      expect(cubit.state.queue, isEmpty);
+    });
   });
 
   test('a load finishing after end() starts nothing and the decks are free', () async {

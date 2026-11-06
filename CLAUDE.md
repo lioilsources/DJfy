@@ -54,6 +54,7 @@ lib/
 
 - Host phone = source of truth (queue, votes, bans, playback); `services/djfy/` Go relay only forwards (SSE down, POST up) and caches the last snapshot. Guest PWA is embedded in the relay (`services/djfy/web/`, plain JS, no build step).
 - `lib/features/party/`: `PartyCubit` (app-level, survives leaving the screen), `PartyPlayer` (plays on decks 1/2 from `DeckRegistry`, which alternate; streaming via just_audio; every track change goes through one cancellable `_transition`; the queue only changes once a track is on air; Auto-DJ = moving the real crossfader + ±8 % beatmatch), `airplay_button.dart` → `djfy/airplay` platform view in `ios/Runner/AppDelegate.swift`.
+- `lib/features/party/auto_picker.dart`: when no playable track is left ~90 s before the end (or after Next on an empty queue), adds one `🤖 Auto` track: Last.fm similar → artist top tracks → SoundCloud by artist → replay from history. Auto entries rank after anything people added; vetoed or failed tracks are never picked again that party. Switch `NEKONČIT`, on by default.
 - `lib/core/smart_queue.dart`: score = votes × freshness × BPM compatibility × mood lock; pinned entries first.
 - Guests reference tracks only by id from the host's own search results (no injected URLs).
 - Relay URL: `--dart-define=DJFY_RELAY_URL=…` (default `https://djfy.ol1n.com`); relay port 8097 (8095 is taken by webtoon).

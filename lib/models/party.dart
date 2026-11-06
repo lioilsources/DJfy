@@ -40,6 +40,10 @@ class QueueEntry {
   /// Host "play next": pinned entries skip scoring and play in pin order.
   final DateTime? pinnedAt;
 
+  /// Picked by [AutoPicker] to keep the party going; anything a person added
+  /// plays first.
+  final bool isAuto;
+
   const QueueEntry({
     required this.id,
     required this.track,
@@ -48,6 +52,7 @@ class QueueEntry {
     required this.addedAt,
     this.votes = const {},
     this.pinnedAt,
+    this.isAuto = false,
   });
 
   int get upVotes => votes.values.where((v) => v > 0).length;
@@ -66,6 +71,7 @@ class QueueEntry {
         addedAt: addedAt,
         votes: votes ?? this.votes,
         pinnedAt: clearPin ? null : (pinnedAt ?? this.pinnedAt),
+        isAuto: isAuto,
       );
 }
 

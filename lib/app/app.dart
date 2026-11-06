@@ -5,6 +5,7 @@ import '../features/deck/deck_cubit.dart';
 import '../features/deck/deck_registry.dart';
 import '../features/deck/deck_screen.dart';
 import '../features/mixer/mixer_cubit.dart';
+import '../features/party/auto_picker.dart';
 import '../features/party/party_cubit.dart';
 import '../features/party/party_player.dart';
 import '../features/party/party_screen.dart';
@@ -51,6 +52,7 @@ class DjDeckifyApp extends StatelessWidget {
               GetIt.I<RelayClient>(),
               GetIt.I<SoundCloudService>(),
               bpm: GetIt.I<BpmService>(),
+              picker: AutoPicker(GetIt.I<LastFmService>(), GetIt.I<SoundCloudService>()),
               playerFactory: (events) => PartyPlayer(ctx.read<DeckRegistry>(), ctx.read<MixerCubit>(), events),
             ),
           ),

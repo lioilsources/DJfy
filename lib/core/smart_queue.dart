@@ -27,7 +27,8 @@ class ScoredEntry {
 /// * **BPM** — closeness to the current track's tempo, half/double-time aware.
 /// * **mood lock** — outside the window ⇒ blocked; unknown BPM ⇒ penalized.
 ///
-/// Pinned entries (host "play next") always come first, in pin order.
+/// Pinned entries (host "play next") always come first, in pin order; tracks
+/// the auto-picker added come after anything a person asked for.
 class SmartQueue {
   static const coDjWeight = 3;
   static const artistCooldown = 3;
@@ -54,6 +55,7 @@ class SmartQueue {
     final sorted = rest.toList()
       ..sort((a, b) {
         if (a.blocked != b.blocked) return a.blocked ? 1 : -1;
+        if (a.entry.isAuto != b.entry.isAuto) return a.entry.isAuto ? 1 : -1;
         final byScore = b.score.compareTo(a.score);
         return byScore != 0 ? byScore : a.entry.addedAt.compareTo(b.entry.addedAt);
       });

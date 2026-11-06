@@ -234,6 +234,7 @@ class _NowPlayingCard extends StatelessWidget {
           a.loadingNext != b.loadingNext ||
           a.transition != b.transition ||
           a.autoDj != b.autoDj ||
+          a.endless != b.endless ||
           a.moodLock != b.moodLock ||
           a.queue.isEmpty != b.queue.isEmpty,
       builder: (context, s) {
@@ -304,16 +305,19 @@ class _NowPlayingCard extends StatelessWidget {
                   );
                 },
               ),
-              Row(
+              Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 4,
                 children: [
                   const Text('AUTO-DJ', style: TextStyle(color: Colors.white54, fontSize: 11, letterSpacing: 1)),
                   Switch(value: s.autoDj, onChanged: cubit.setAutoDj, activeThumbColor: kNeonPurple),
+                  const Text('NEKONČIT', style: TextStyle(color: Colors.white54, fontSize: 11, letterSpacing: 1)),
+                  Switch(value: s.endless, onChanged: cubit.setEndless, activeThumbColor: kNeonPurple),
                   ActionChip(
                     avatar: const Icon(Icons.lock_outline, size: 14),
                     label: Text(s.moodLock?.toString() ?? 'Mood lock', style: const TextStyle(fontSize: 11)),
                     onPressed: () => _editMoodLock(context, s.moodLock),
                   ),
-                  const Spacer(),
                   const AirPlayButton(),
                 ],
               ),

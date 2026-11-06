@@ -35,6 +35,9 @@ class PartyPlayerEvents {
   final void Function(bool playing) onPlayState;
   final void Function(bool loading) onLoading;
 
+  /// The live track is close to its end; called on every position update.
+  final void Function() onRunningOut;
+
   /// A crossfade from [from] to [to] began; both null when it finished.
   final void Function(Track? from, Track? to) onTransition;
 
@@ -45,6 +48,7 @@ class PartyPlayerEvents {
     required this.onSkipped,
     required this.onQueueEmpty,
     required this.onEnded,
+    required this.onRunningOut,
     required this.onPlayState,
     required this.onLoading,
     required this.onTransition,
@@ -86,6 +90,9 @@ class PartyPlayer {
   /// A stream that isn't playable by then is skipped (dead link, geo-block…).
   static const loadTimeout = Duration(seconds: 15);
   static const preloadLead = Duration(seconds: 45);
+
+  /// Ahead of [preloadLead], so a picked track can still be preloaded.
+  static const runningOutLead = Duration(seconds: 90);
   static const _fadeStep = Duration(milliseconds: 50);
 
   final DeckRegistry _decks;
@@ -193,6 +200,7 @@ class PartyPlayer {
     final config = liveDeck.state.config;
     if (config.duration <= Duration.zero) return;
     final remaining = config.duration - config.position;
+    if (remaining <= runningOutLead) _events.onRunningOut();
     if (remaining <= preloadLead) _preload();
     if (autoDj && remaining <= crossfade && _events.peekNext(null) != null) {
       unawaited(_transition(_Kind.autoMix));
