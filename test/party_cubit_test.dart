@@ -1,5 +1,7 @@
+import 'package:dj_deckify/core/smart_queue.dart';
 import 'package:dj_deckify/features/party/party_cubit.dart';
 import 'package:dj_deckify/features/party/party_player.dart';
+import 'package:dj_deckify/models/party.dart';
 import 'package:dj_deckify/models/track.dart';
 import 'package:dj_deckify/services/relay_client.dart';
 import 'package:dj_deckify/services/soundcloud_service.dart';
@@ -58,6 +60,18 @@ void main() {
 
   Map<String, dynamic> msg(String type, [Map<String, dynamic> extra = const {}]) =>
       {'type': type, 'guestId': 'g-aaaaaaaa', 'name': '🎧 Káťa', ...extra};
+
+  test('an auto track never outranks one a person added', () {
+    final now = DateTime(2026);
+    QueueEntry entry(String id, Track t, {bool isAuto = false}) =>
+        QueueEntry(id: id, track: t, proposedByName: 'x', addedAt: now, isAuto: isAuto);
+    final ranked = SmartQueue.rank(
+      [entry('auto', t1, isAuto: true), entry('person', t2)],
+      current: t1,
+      now: now,
+    );
+    expect(ranked.map((s) => s.entry.id), ['person', 'auto']);
+  });
 
   test('guest search returns wire tracks without stream URLs', () async {
     await cubit.handleGuestMessage(msg('search', {'q': 'daft', 'reqId': 'r1'}));

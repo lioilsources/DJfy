@@ -21,6 +21,9 @@ class PartyState {
   final List<Track> history;
   final bool isPlaying;
   final bool autoDj;
+
+  /// When the queue runs dry, pick the next track instead of going silent.
+  final bool endless;
   final MoodLock? moodLock;
   final String? message;
 
@@ -45,6 +48,7 @@ class PartyState {
     this.history = const [],
     this.isPlaying = false,
     this.autoDj = false,
+    this.endless = true,
     this.moodLock,
     this.message,
     this.loadingNext = false,
@@ -71,6 +75,7 @@ class PartyState {
     List<Track>? history,
     bool? isPlaying,
     bool? autoDj,
+    bool? endless,
     MoodLock? moodLock,
     bool clearMoodLock = false,
     String? message,
@@ -93,6 +98,7 @@ class PartyState {
         history: history ?? this.history,
         isPlaying: isPlaying ?? this.isPlaying,
         autoDj: autoDj ?? this.autoDj,
+        endless: endless ?? this.endless,
         moodLock: clearMoodLock ? null : (moodLock ?? this.moodLock),
         message: message,
         loadingNext: loadingNext ?? this.loadingNext,

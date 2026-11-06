@@ -9,6 +9,7 @@ import '../../models/track.dart';
 import '../../services/bpm_service.dart';
 import '../../services/relay_client.dart';
 import '../../services/soundcloud_service.dart';
+import 'auto_picker.dart';
 import 'party_player.dart';
 import 'party_state.dart';
 
@@ -20,10 +21,14 @@ class PartyCubit extends Cubit<PartyState> {
   static const maxQueuedPerGuest = 3;
   static const snapshotQueueLimit = 50;
   static const _knownTracksMax = 500;
+  static const _autoName = '🤖 Auto';
+  static const _pickTimeout = Duration(seconds: 25);
+  static const _pickRetry = Duration(seconds: 30);
 
   final RelayClient _relay;
   final SoundCloudService _sc;
   final BpmService? _bpm;
+  final AutoPicker? _picker;
   late final PartyPlayer _player;
   final DateTime Function() _now;
 
@@ -36,6 +41,14 @@ class PartyCubit extends Cubit<PartyState> {
   /// Queue ran dry mid-party: the next added track should start on its own.
   bool _starved = false;
 
+  bool _picking = false;
+  int _pickGen = 0;
+  DateTime? _nextPick;
+  Timer? _pickRetryTimer;
+
+  /// Vetoed or unplayable tracks; never picked again this party.
+  final Set<String> _rejected = {};
+
   /// Tracks we've shown guests in search results. Proposals may only name
   /// these ids, so guests can't inject arbitrary tracks or URLs.
   final Map<String, Track> _known = {};
@@ -44,9 +57,11 @@ class PartyCubit extends Cubit<PartyState> {
     this._relay,
     this._sc, {
     BpmService? bpm,
+    AutoPicker? picker,
     required PartyPlayerFactory playerFactory,
     DateTime Function()? now,
   })  : _bpm = bpm,
+        _picker = picker,
         _now = now ?? DateTime.now,
         super(const PartyState()) {
     _player = playerFactory(PartyPlayerEvents(
@@ -54,8 +69,9 @@ class PartyCubit extends Cubit<PartyState> {
       onStarted: _onStarted,
       onFailed: _onFailed,
       onSkipped: _dropTrack,
-      onQueueEmpty: () => _toast('Fronta je prázdná'),
+      onQueueEmpty: _onQueueEmpty,
       onEnded: _onEnded,
+      onRunningOut: () => unawaited(_keepGoing()),
       onPlayState: _onPlayState,
       onLoading: (loading) {
         if (!isClosed) emit(state.copyWith(loadingNext: loading));
@@ -102,6 +118,11 @@ class PartyCubit extends Cubit<PartyState> {
   Future<void> _teardown() async {
     _heartbeat?.cancel();
     _publishDebounce?.cancel();
+    _pickRetryTimer?.cancel();
+    _pickGen++;
+    _picking = false;
+    _nextPick = null;
+    _rejected.clear();
     await _relaySub?.cancel();
     _relaySub = null;
     await _player.stop();
@@ -223,13 +244,17 @@ class PartyCubit extends Cubit<PartyState> {
   }
 
   Future<QueueEntry> _addEntry(Track track, {String? proposedBy, required String proposedByName}) async {
-    final enriched = await _withBpm(track);
+    return _enqueue(await _withBpm(track), proposedBy: proposedBy, proposedByName: proposedByName);
+  }
+
+  QueueEntry _enqueue(Track track, {String? proposedBy, required String proposedByName, bool isAuto = false}) {
     final entry = QueueEntry(
       id: 'e${++_entrySeq}',
-      track: enriched,
+      track: track,
       proposedBy: proposedBy,
       proposedByName: proposedByName,
       addedAt: _now(),
+      isAuto: isAuto,
     );
     _updateQueue([...state.queue, entry]);
     if (_starved) {
@@ -250,6 +275,7 @@ class PartyCubit extends Cubit<PartyState> {
   }
 
   void veto(String entryId) {
+    _rejected.addAll(state.queue.where((e) => e.id == entryId).map((e) => e.track.id));
     _updateQueue(state.queue.where((e) => e.id != entryId).toList());
   }
 
@@ -294,6 +320,12 @@ class PartyCubit extends Cubit<PartyState> {
     _schedulePublish();
   }
 
+  void setEndless(bool on) {
+    emit(state.copyWith(endless: on));
+    if (!on) _pickRetryTimer?.cancel();
+    if (on) unawaited(_keepGoing());
+  }
+
   Future<void> skip() => _player.skip();
 
   Future<void> togglePlay() async {
@@ -303,6 +335,66 @@ class PartyCubit extends Cubit<PartyState> {
     } else {
       await _player.togglePause();
     }
+  }
+
+  // ── Endless party ──────────────────────────────────────────────────────────
+
+  bool get _canPick =>
+      _picker != null &&
+      state.endless &&
+      state.phase == PartyPhase.live &&
+      (state.nowPlaying != null || state.history.isNotEmpty);
+
+  /// Tops up an empty queue with one track, so guests' picks stay in charge.
+  Future<void> _keepGoing() async {
+    if (!_canPick || _picking || _peekNext(null) != null) return;
+    if (_nextPick case final at? when _now().isBefore(at)) return;
+    _picking = true;
+    final gen = _pickGen;
+    Track? track;
+    try {
+      track = await _picker!
+          .pick(
+            recent: [?state.nowPlaying, ...state.history],
+            avoid: {..._rejected, for (final e in state.queue) e.track.id},
+            moodLock: state.moodLock,
+            withBpm: _withBpm,
+          )
+          .timeout(_pickTimeout);
+    } catch (e) {
+      debugPrint('[Party] auto pick failed: $e');
+    }
+    if (gen != _pickGen || isClosed) return;
+    _picking = false;
+    if (!state.endless) {
+      if (state.nowPlaying != null) _starved = false;
+      return;
+    }
+    if (_peekNext(null) != null) return; // someone added a track meanwhile
+    if (track != null) {
+      _nextPick = null;
+      _enqueue(track, proposedByName: _autoName, isAuto: true);
+      return;
+    }
+    _nextPick = _now().add(_pickRetry);
+    _toast('Nenašel jsem další skladbu – přidej nějakou do fronty');
+    if (state.nowPlaying == null) {
+      _pickRetryTimer?.cancel();
+      _pickRetryTimer = Timer(_pickRetry, () => unawaited(_keepGoing()));
+    } else {
+      _starved = false; // don't cut the live track when a guest adds one later
+    }
+  }
+
+  void _onQueueEmpty() {
+    if (!_canPick) {
+      _toast('Fronta je prázdná');
+      return;
+    }
+    _starved = true; // Next was pressed: start the pick as soon as it's in
+    _nextPick = null;
+    _toast('Vybírám další skladbu…');
+    unawaited(_keepGoing());
   }
 
   // ── Player callbacks ───────────────────────────────────────────────────────
@@ -334,6 +426,7 @@ class PartyCubit extends Cubit<PartyState> {
   }
 
   void _onFailed(Track track, Object error) {
+    _rejected.add(track.id);
     _dropTrack(track);
     _toast('Nejde přehrát „${track.title}“ – přeskakuju');
   }
@@ -349,6 +442,8 @@ class PartyCubit extends Cubit<PartyState> {
     _pushHistory();
     emit(state.copyWith(clearNowPlaying: true, isPlaying: false));
     _rerank();
+    _nextPick = null;
+    unawaited(_keepGoing());
   }
 
   void _onPlayState(bool playing) {
