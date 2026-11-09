@@ -6,6 +6,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../app/theme.dart';
 import '../../core/smart_queue.dart';
+import '../../l10n/l10n.dart';
 import '../../models/party.dart';
 import '../../models/track.dart';
 import '../deck/deck_cubit.dart';
@@ -28,7 +29,7 @@ class PartyScreen extends StatelessWidget {
       builder: (context, state) => switch (state.phase) {
         PartyPhase.idle || PartyPhase.starting => const _StartView(),
         PartyPhase.live => const _LiveView(),
-        PartyPhase.error => _ErrorView(state.message ?? 'Chyba'),
+        PartyPhase.error => _ErrorView(state.message ?? context.l10n.genericError),
       },
     );
   }
@@ -55,6 +56,7 @@ class _StartViewState extends State<_StartView> {
   @override
   Widget build(BuildContext context) {
     final starting = context.select((PartyCubit c) => c.state.phase == PartyPhase.starting);
+    final l10n = context.l10n;
     return Scaffold(
       appBar: AppBar(title: const Text('PARTY')),
       body: ListView(
@@ -62,23 +64,22 @@ class _StartViewState extends State<_StartView> {
         children: [
           const Icon(Icons.celebration, color: kNeonPurple, size: 64),
           const SizedBox(height: 16),
-          const Text(
-            'Tvůj telefon je DJ. Reproduktor je jen reproduktor.',
+          Text(
+            l10n.partyTagline,
             textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+            style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
-          const Text(
-            'Hosté naskenují QR, hledají a hlasují v prohlížeči – bez appky a bez účtu. '
-            'Fronta žije u tebe, zvuk pošleš přes AirPlay nebo Bluetooth.',
+          Text(
+            l10n.partyIntro,
             textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.white54),
+            style: const TextStyle(color: Colors.white54),
           ),
           const SizedBox(height: 32),
           TextField(
             controller: _name,
             style: const TextStyle(color: Colors.white),
-            decoration: const InputDecoration(labelText: 'Název party'),
+            decoration: InputDecoration(labelText: l10n.partyNameLabel),
           ),
           const SizedBox(height: 16),
           ElevatedButton.icon(
@@ -86,7 +87,7 @@ class _StartViewState extends State<_StartView> {
             icon: starting
                 ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
                 : const Icon(Icons.qr_code),
-            label: const Text('ZALOŽIT PARTY'),
+            label: Text(l10n.startParty),
             style: ElevatedButton.styleFrom(
               backgroundColor: kNeonCyan,
               foregroundColor: Colors.black,
@@ -115,7 +116,7 @@ class _ErrorView extends StatelessWidget {
             children: [
               Text(message, style: const TextStyle(color: Colors.redAccent), textAlign: TextAlign.center),
               const SizedBox(height: 16),
-              TextButton(onPressed: () => context.read<PartyCubit>().end(), child: const Text('ZPĚT')),
+              TextButton(onPressed: () => context.read<PartyCubit>().end(), child: Text(context.l10n.back)),
             ],
           ),
         ),
@@ -132,6 +133,7 @@ class _LiveView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cubit = context.read<PartyCubit>();
+    final l10n = context.l10n;
     return DefaultTabController(
       length: 3,
       child: Scaffold(
@@ -148,22 +150,22 @@ class _LiveView extends StatelessWidget {
           ),
           actions: [
             IconButton(
-              tooltip: 'QR pro hosty',
+              tooltip: l10n.qrForGuests,
               icon: const Icon(Icons.qr_code_2),
               onPressed: () => _showJoin(context),
             ),
             IconButton(
-              tooltip: 'Ukončit party',
+              tooltip: l10n.endParty,
               icon: const Icon(Icons.power_settings_new),
               onPressed: () async {
                 final ok = await showDialog<bool>(
                   context: context,
                   builder: (ctx) => AlertDialog(
-                    title: const Text('Ukončit party?'),
-                    content: const Text('Hosté se odpojí a fronta se smaže.'),
+                    title: Text(l10n.endPartyQuestion),
+                    content: Text(l10n.endPartyWarning),
                     actions: [
-                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('NE')),
-                      TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('UKONČIT')),
+                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(l10n.no)),
+                      TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(l10n.endAction)),
                     ],
                   ),
                 );
@@ -171,11 +173,11 @@ class _LiveView extends StatelessWidget {
               },
             ),
           ],
-          bottom: const TabBar(
+          bottom: TabBar(
             indicatorColor: kNeonCyan,
             labelColor: kNeonCyan,
             unselectedLabelColor: Colors.white38,
-            tabs: [Tab(text: 'FRONTA'), Tab(text: 'HOSTÉ'), Tab(text: 'HLEDAT')],
+            tabs: [Tab(text: l10n.tabQueue), Tab(text: l10n.tabGuests), Tab(text: l10n.tabSearch)],
           ),
         ),
         body: const Column(
@@ -211,7 +213,7 @@ class _LiveView extends StatelessWidget {
                 Navigator.pop(ctx);
               },
               icon: const Icon(Icons.copy, size: 16),
-              label: const Text('KOPÍROVAT ODKAZ'),
+              label: Text(ctx.l10n.copyLink),
             ),
           ],
         ),
@@ -253,7 +255,7 @@ class _NowPlayingCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          t?.title ?? (s.queue.isEmpty ? 'Fronta je prázdná' : 'Připraveno – zmáčkni ▶'),
+                          t?.title ?? (s.queue.isEmpty ? context.l10n.queueEmpty : context.l10n.readyPressPlay),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
@@ -262,7 +264,7 @@ class _NowPlayingCard extends StatelessWidget {
                           [
                             if (t != null) t.artist,
                             if (t?.bpm != null) '${t!.bpm} BPM',
-                            if (s.nowPlayingEntry != null) 'přidal(a) ${s.nowPlayingEntry!.proposedByName}',
+                            if (s.nowPlayingEntry != null) context.l10n.addedBy(s.nowPlayingEntry!.proposedByName),
                           ].join(' · '),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -311,11 +313,11 @@ class _NowPlayingCard extends StatelessWidget {
                 children: [
                   const Text('AUTO-DJ', style: TextStyle(color: Colors.white54, fontSize: 11, letterSpacing: 1)),
                   Switch(value: s.autoDj, onChanged: cubit.setAutoDj, activeThumbColor: kNeonPurple),
-                  const Text('NEKONČIT', style: TextStyle(color: Colors.white54, fontSize: 11, letterSpacing: 1)),
+                  Text(context.l10n.keepGoing, style: const TextStyle(color: Colors.white54, fontSize: 11, letterSpacing: 1)),
                   Switch(value: s.endless, onChanged: cubit.setEndless, activeThumbColor: kNeonPurple),
                   ActionChip(
                     avatar: const Icon(Icons.lock_outline, size: 14),
-                    label: Text(s.moodLock?.toString() ?? 'Mood lock', style: const TextStyle(fontSize: 11)),
+                    label: Text(s.moodLock?.toString() ?? context.l10n.moodLock, style: const TextStyle(fontSize: 11)),
                     onPressed: () => _editMoodLock(context, s.moodLock),
                   ),
                   const AirPlayButton(),
@@ -338,7 +340,7 @@ class _NowPlayingCard extends StatelessWidget {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setState) => AlertDialog(
-          title: const Text('Mood lock'),
+          title: Text(ctx.l10n.moodLock),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -350,15 +352,15 @@ class _NowPlayingCard extends StatelessWidget {
                 divisions: 130,
                 onChanged: (v) => setState(() => range = v),
               ),
-              const Text(
-                'Skladby mimo rozsah zůstanou ve frontě, ale nezahrají se samy.',
-                style: TextStyle(fontSize: 12, color: Colors.white54),
+              Text(
+                ctx.l10n.moodLockHint,
+                style: const TextStyle(fontSize: 12, color: Colors.white54),
               ),
             ],
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('VYPNOUT')),
-            TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('ZAMKNOUT')),
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(ctx.l10n.turnOff)),
+            TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(ctx.l10n.lockAction)),
           ],
         ),
       ),
@@ -381,8 +383,8 @@ class _QueueTab extends StatelessWidget {
       buildWhen: (a, b) => a.ranked != b.ranked,
       builder: (context, s) {
         if (s.ranked.isEmpty) {
-          return const Center(
-            child: Text('Zatím nic. Přidej skladbu nebo ukaž hostům QR.', style: TextStyle(color: Colors.white38)),
+          return Center(
+            child: Text(context.l10n.queueEmptyHint, style: const TextStyle(color: Colors.white38)),
           );
         }
         return ListView.builder(
@@ -394,9 +396,12 @@ class _QueueTab extends StatelessWidget {
               direction: DismissDirection.endToStart,
               background: Container(
                 color: Colors.redAccent.withAlpha(60),
-                alignment: Alignment.centerRight,
-                padding: const EdgeInsets.only(right: 24),
-                child: const Text('VETO', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                alignment: AlignmentDirectional.centerEnd,
+                padding: const EdgeInsetsDirectional.only(end: 24),
+                child: Text(
+                  context.l10n.vetoBadge,
+                  style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold),
+                ),
               ),
               onDismissed: (_) => cubit.veto(se.entry.id),
               child: _QueueTile(se),
@@ -442,9 +447,9 @@ class _QueueTile extends StatelessWidget {
             _ => cubit.veto(e.id),
           },
           itemBuilder: (_) => [
-            const PopupMenuItem(value: 'now', child: Text('Hrát hned')),
-            PopupMenuItem(value: 'pin', child: Text(e.pinnedAt == null ? 'Hrát příští' : 'Odepnout')),
-            const PopupMenuItem(value: 'veto', child: Text('Veto')),
+            PopupMenuItem(value: 'now', child: Text(context.l10n.playNow)),
+            PopupMenuItem(value: 'pin', child: Text(e.pinnedAt == null ? context.l10n.playNext : context.l10n.unpin)),
+            PopupMenuItem(value: 'veto', child: Text(context.l10n.vetoMenu)),
           ],
         ),
       ),
@@ -464,7 +469,7 @@ class _GuestsTab extends StatelessWidget {
         final guests = s.guests.values.where((g) => !s.banned.contains(g.id)).toList()
           ..sort((a, b) => b.lastSeen.compareTo(a.lastSeen));
         if (guests.isEmpty) {
-          return const Center(child: Text('Zatím nikdo nedorazil', style: TextStyle(color: Colors.white38)));
+          return Center(child: Text(context.l10n.noGuestsYet, style: const TextStyle(color: Colors.white38)));
         }
         return ListView(
           children: [
@@ -472,17 +477,17 @@ class _GuestsTab extends StatelessWidget {
               ListTile(
                 dense: true,
                 title: Text(g.name, style: const TextStyle(color: Colors.white)),
-                subtitle: Text(g.isCoDj ? 'co-DJ · hlas ×${SmartQueue.coDjWeight}, může dát veto' : 'host'),
+                subtitle: Text(g.isCoDj ? context.l10n.coDjSubtitle(SmartQueue.coDjWeight) : context.l10n.guestRole),
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     IconButton(
-                      tooltip: g.isCoDj ? 'Odebrat co-DJ' : 'Povýšit na co-DJ',
+                      tooltip: g.isCoDj ? context.l10n.removeCoDj : context.l10n.promoteCoDj,
                       icon: Icon(Icons.headphones, color: g.isCoDj ? kNeonPurple : Colors.white38),
                       onPressed: () => cubit.toggleCoDj(g.id),
                     ),
                     IconButton(
-                      tooltip: 'Zablokovat',
+                      tooltip: context.l10n.blockGuest,
                       icon: const Icon(Icons.block, color: Colors.redAccent),
                       onPressed: () => cubit.ban(g.id),
                     ),
@@ -534,9 +539,9 @@ class _SearchTabState extends State<_SearchTab> {
             style: const TextStyle(color: Colors.white),
             textInputAction: TextInputAction.search,
             onSubmitted: (_) => _search(),
-            decoration: const InputDecoration(
-              hintText: 'Hledat na SoundCloudu…',
-              prefixIcon: Icon(Icons.search, size: 18),
+            decoration: InputDecoration(
+              hintText: context.l10n.searchSoundCloudHint,
+              prefixIcon: const Icon(Icons.search, size: 18),
               isDense: true,
             ),
           ),
@@ -556,7 +561,7 @@ class _SearchTabState extends State<_SearchTab> {
                     onPressed: () {
                       cubit.addTrack(t);
                       ScaffoldMessenger.of(context)
-                          .showSnackBar(SnackBar(content: Text('„${t.title}“ přidáno')));
+                          .showSnackBar(SnackBar(content: Text(context.l10n.trackAdded(t.title))));
                     },
                   ),
                 ),

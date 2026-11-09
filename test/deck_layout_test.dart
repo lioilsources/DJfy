@@ -5,6 +5,7 @@ import 'package:dj_deckify/features/deck/deck_screen.dart';
 import 'package:dj_deckify/features/deck/deck_state.dart';
 import 'package:dj_deckify/features/deck/deck_widget.dart';
 import 'package:dj_deckify/features/mixer/mixer_cubit.dart';
+import 'package:dj_deckify/l10n/l10n.dart';
 import 'package:dj_deckify/models/deck_config.dart';
 import 'package:dj_deckify/models/track.dart';
 import 'package:flutter/material.dart';
@@ -36,6 +37,8 @@ void main() {
       when(() => deck.deckId).thenReturn(1);
 
       await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: Center(
             child: SizedBox(
@@ -65,6 +68,8 @@ void main() {
     tester.view.devicePixelRatio = 3;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: Scaffold(
         body: MultiBlocProvider(
           providers: [BlocProvider.value(value: mixer), BlocProvider.value(value: decks)],

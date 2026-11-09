@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../app/theme.dart';
 import '../mixer/mixer_cubit.dart';
+import '../../l10n/l10n.dart';
 import 'deck_registry.dart';
 import 'deck_widget.dart';
 
@@ -46,7 +47,7 @@ class DeckScreen extends StatelessWidget {
                 child: TextButton.icon(
                   onPressed: registry.add,
                   icon: const Icon(Icons.add, size: 18),
-                  label: const Text('PŘIDAT DECK'),
+                  label: Text(context.l10n.addDeck),
                   style: TextButton.styleFrom(
                     foregroundColor: kNeonCyan,
                     textStyle: const TextStyle(
