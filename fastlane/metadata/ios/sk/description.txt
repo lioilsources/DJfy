@@ -1,0 +1,19 @@
+DJfy urobí z tvojho telefónu DJ pult aj party jukebox.
+
+DECKY
+• Až 6 deckov s vinylom, seekom, tempom a hlasitosťou
+• Crossfader medzi deckmi A a B
+• EQ kill (LOW / MID / HIGH) a FX pad: HI-LO, ECHO, REVERB, 8-BIT, ROLL v rytme BPM
+
+SMART PLAYLIST
+• Zadaj kapelu alebo pieseň a DJfy nájde podobné skladby cez Last.fm
+• Zoradené podľa BPM pre plynulý mix
+
+PARTY
+• Hostia naskenujú QR, hľadajú a hlasujú v prehliadači – bez appky a bez účtu
+• Chytrá fronta: hlasy, čakanie, BPM a mood lock
+• Co-DJ, veto a blokovanie hostí
+• Auto-DJ s crossfadom a beatmatchom; režim NEKONČIŤ pridáva skladby sám
+• Zvuk pošleš cez AirPlay alebo Bluetooth
+
+BPM dáta: GetSongBPM. Odporúčania: Last.fm. Streaming: SoundCloud.

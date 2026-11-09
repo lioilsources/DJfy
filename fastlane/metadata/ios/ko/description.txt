@@ -1,0 +1,19 @@
+DJfy는 휴대폰을 DJ 부스이자 파티 주크박스로 바꿔 줍니다.
+
+덱
+• 최대 6개 덱: 바이닐, 탐색, 템포, 볼륨
+• 덱 A와 B 사이 크로스페이더
+• EQ 킬(LOW / MID / HIGH)과 FX 패드: BPM에 맞춘 HI-LO, ECHO, REVERB, 8-BIT, ROLL
+
+스마트 플레이리스트
+• 밴드나 곡을 입력하면 DJfy가 Last.fm으로 비슷한 트랙을 찾아 줍니다
+• 매끄러운 믹스를 위해 BPM순 정렬
+
+파티
+• 게스트는 QR을 스캔해 브라우저에서 검색하고 투표합니다. 앱도 계정도 필요 없어요
+• 스마트 대기열: 투표, 대기 시간, BPM, Mood lock
+• co-DJ, 거부권, 게스트 차단
+• 크로스페이드와 비트매칭을 지원하는 Auto-DJ, 논스톱 모드는 트랙을 알아서 추가
+• 소리는 AirPlay나 Bluetooth로
+
+BPM 데이터: GetSongBPM. 추천: Last.fm. 스트리밍: SoundCloud.

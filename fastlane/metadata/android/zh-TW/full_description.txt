@@ -1,0 +1,19 @@
+DJfy 讓你的手機變成 DJ 台和派對點唱機。
+
+唱盤
+• 最多 6 個唱盤，支援黑膠、定位、速度和音量
+• A、B 唱盤之間的交叉推桿
+• EQ 切除（LOW / MID / HIGH）和效果板：與 BPM 同步的 HI-LO、ECHO、REVERB、8-BIT、ROLL
+
+智慧播放清單
+• 輸入樂團或歌曲，DJfy 透過 Last.fm 找出相似曲目
+• 依 BPM 排序，混音更順暢
+
+派對
+• 來賓掃描 QR 碼，在瀏覽器中搜尋和投票——不用 App，也不用帳號
+• 智慧佇列：投票、等待時間、BPM 和 Mood lock
+• co-DJ、否決權和封鎖來賓
+• 具備交叉淡化和節拍對齊的 Auto-DJ；「不停歇」模式會自動加入曲目
+• 聲音透過 AirPlay 或藍牙播放
+
+BPM 資料：GetSongBPM。推薦：Last.fm。串流：SoundCloud。

@@ -17,6 +17,7 @@ import '../services/bpm_service.dart';
 import '../services/lastfm_service.dart';
 import '../services/relay_client.dart';
 import '../services/soundcloud_service.dart';
+import '../l10n/l10n.dart';
 import 'theme.dart';
 
 class DjDeckifyApp extends StatelessWidget {
@@ -28,6 +29,8 @@ class DjDeckifyApp extends StatelessWidget {
       title: 'DJ Deckify',
       theme: djTheme,
       debugShowCheckedModeBanner: false,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: MultiBlocProvider(
         providers: [
           BlocProvider(
@@ -52,6 +55,7 @@ class DjDeckifyApp extends StatelessWidget {
               GetIt.I<RelayClient>(),
               GetIt.I<SoundCloudService>(),
               bpm: GetIt.I<BpmService>(),
+              strings: deviceStrings,
               picker: AutoPicker(GetIt.I<LastFmService>(), GetIt.I<SoundCloudService>()),
               playerFactory: (events) => PartyPlayer(ctx.read<DeckRegistry>(), ctx.read<MixerCubit>(), events),
             ),
@@ -82,7 +86,7 @@ class _HomeScreen extends StatelessWidget {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.only(right: 12),
+            padding: const EdgeInsetsDirectional.only(end: 12),
             child: Center(
               child: Text(
                 'v1.0',
@@ -132,14 +136,14 @@ class _PartyBar extends StatelessWidget {
           child: InkWell(
             onTap: () => _openParty(context),
             child: Padding(
-              padding: const EdgeInsets.only(left: 12),
+              padding: const EdgeInsetsDirectional.only(start: 12),
               child: Row(
                 children: [
                   const Icon(Icons.celebration, size: 16, color: kNeonPurple),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      '${s.nowPlaying?.title ?? 'Party ${s.code}'} · fronta: ${s.queue.length}',
+                      context.l10n.partyBarStatus(s.nowPlaying?.title ?? context.l10n.partyWithCode(s.code ?? ''), s.queue.length),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(color: Colors.white70, fontSize: 12),

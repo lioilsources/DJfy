@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../app/theme.dart';
+import '../../l10n/l10n.dart';
 import 'playlist_cubit.dart';
 import 'playlist_state.dart';
 import 'track_list_item.dart';
@@ -72,10 +73,10 @@ class _PlaylistPanelState extends State<PlaylistPanel> {
                     child: TextField(
                       controller: _controller,
                       style: const TextStyle(color: Colors.white, fontSize: 13),
-                      decoration: const InputDecoration(
-                        hintText: 'Interpret nebo Interpret - Song...',
-                        prefixIcon: Icon(Icons.search, size: 18),
-                        contentPadding: EdgeInsets.symmetric(vertical: 10),
+                      decoration: InputDecoration(
+                        hintText: context.l10n.playlistSearchHint,
+                        prefixIcon: const Icon(Icons.search, size: 18),
+                        contentPadding: const EdgeInsets.symmetric(vertical: 10),
                         isDense: true,
                       ),
                       onSubmitted: (_) => _search(context),
@@ -100,10 +101,10 @@ class _PlaylistPanelState extends State<PlaylistPanel> {
               child: BlocBuilder<PlaylistCubit, PlaylistState>(
                 builder: (context, state) {
                   return switch (state) {
-                    PlaylistIdle() => const Center(
+                    PlaylistIdle() => Center(
                         child: Text(
-                          'Zadej kapelu nebo song',
-                          style: TextStyle(color: Colors.white38),
+                          context.l10n.playlistIdle,
+                          style: const TextStyle(color: Colors.white38),
                         ),
                       ),
                     PlaylistSearching(:final query) => Center(
@@ -116,7 +117,7 @@ class _PlaylistPanelState extends State<PlaylistPanel> {
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              'Hledám "$query"…',
+                              context.l10n.searchingFor(query),
                               style: const TextStyle(
                                   color: Colors.white54, fontSize: 12),
                             ),
@@ -129,11 +130,11 @@ class _PlaylistPanelState extends State<PlaylistPanel> {
                         children: [
                           TrackListItem(track: seed, isSeed: true),
                           if (tracks.isNotEmpty) ...[
-                            const Padding(
-                              padding: EdgeInsets.fromLTRB(16, 8, 16, 4),
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
                               child: Text(
-                                'Podobné (seřazeno dle BPM)',
-                                style: TextStyle(
+                                context.l10n.similarByBpm,
+                                style: const TextStyle(
                                   color: Colors.white38,
                                   fontSize: 10,
                                   letterSpacing: 1,
@@ -160,7 +161,7 @@ class _PlaylistPanelState extends State<PlaylistPanel> {
                         child: Padding(
                           padding: const EdgeInsets.all(16),
                           child: Text(
-                            'Chyba: $message',
+                            context.l10n.errorWithMessage(message),
                             style: const TextStyle(color: Colors.redAccent),
                             textAlign: TextAlign.center,
                           ),

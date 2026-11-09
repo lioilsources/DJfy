@@ -1,0 +1,19 @@
+DJfy transforme ton téléphone en cabine de DJ et en jukebox de soirée.
+
+PLATINES
+• Jusqu’à 6 platines avec vinyle, navigation, tempo et volume
+• Crossfader entre les platines A et B
+• EQ kill (LOW / MID / HIGH) et pad FX : HI-LO, ECHO, REVERB, 8-BIT, ROLL calés sur le BPM
+
+SMART PLAYLIST
+• Saisis un groupe ou un titre et DJfy trouve des morceaux similaires via Last.fm
+• Triés par BPM pour un mix fluide
+
+SOIRÉE
+• Les invités scannent le QR code, cherchent et votent dans leur navigateur – sans appli ni compte
+• File intelligente : votes, temps d’attente, BPM et mood lock
+• Co-DJ, veto et blocage d’invités
+• Auto-DJ avec fondu enchaîné et beatmatching ; le mode NON-STOP ajoute des morceaux tout seul
+• Le son part en AirPlay ou Bluetooth
+
+Données BPM : GetSongBPM. Recommandations : Last.fm. Streaming : SoundCloud.

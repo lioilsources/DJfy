@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../core/smart_queue.dart';
+import '../../l10n/l10n.dart';
 import '../../models/party.dart';
 import '../../models/track.dart';
 import '../../services/bpm_service.dart';
@@ -31,6 +32,10 @@ class PartyCubit extends Cubit<PartyState> {
   final AutoPicker? _picker;
   late final PartyPlayer _player;
   final DateTime Function() _now;
+
+  /// Host-facing texts (toasts, errors). Guest-facing texts and queue reasons
+  /// stay in Czech to match the guest web app.
+  final AppLocalizations Function() _strings;
 
   String? _token;
   StreamSubscription<RelayEvent>? _relaySub;
@@ -60,7 +65,9 @@ class PartyCubit extends Cubit<PartyState> {
     AutoPicker? picker,
     required PartyPlayerFactory playerFactory,
     DateTime Function()? now,
+    AppLocalizations Function()? strings,
   })  : _bpm = bpm,
+        _strings = strings ?? deviceStrings,
         _picker = picker,
         _now = now ?? DateTime.now,
         super(const PartyState()) {
@@ -102,7 +109,7 @@ class PartyCubit extends Cubit<PartyState> {
       _heartbeat = Timer.periodic(const Duration(seconds: 10), (_) => _schedulePublish());
       _publish();
     } catch (e) {
-      emit(state.copyWith(phase: PartyPhase.error, message: 'Relay nedostupný: $e'));
+      emit(state.copyWith(phase: PartyPhase.error, message: _strings().relayUnavailable('$e')));
     }
   }
 
@@ -377,7 +384,7 @@ class PartyCubit extends Cubit<PartyState> {
       return;
     }
     _nextPick = _now().add(_pickRetry);
-    _toast('Nenašel jsem další skladbu – přidej nějakou do fronty');
+    _toast(_strings().toastNoNextTrack);
     if (state.nowPlaying == null) {
       _pickRetryTimer?.cancel();
       _pickRetryTimer = Timer(_pickRetry, () => unawaited(_keepGoing()));
@@ -388,12 +395,12 @@ class PartyCubit extends Cubit<PartyState> {
 
   void _onQueueEmpty() {
     if (!_canPick) {
-      _toast('Fronta je prázdná');
+      _toast(_strings().queueEmpty);
       return;
     }
     _starved = true; // Next was pressed: start the pick as soon as it's in
     _nextPick = null;
-    _toast('Vybírám další skladbu…');
+    _toast(_strings().toastPickingNext);
     unawaited(_keepGoing());
   }
 
@@ -428,7 +435,7 @@ class PartyCubit extends Cubit<PartyState> {
   void _onFailed(Track track, Object error) {
     _rejected.add(track.id);
     _dropTrack(track);
-    _toast('Nejde přehrát „${track.title}“ – přeskakuju');
+    _toast(_strings().toastCannotPlay(track.title));
   }
 
   void _dropTrack(Track track) {

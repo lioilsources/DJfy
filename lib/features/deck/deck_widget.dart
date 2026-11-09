@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../app/theme.dart';
 import '../../core/extensions.dart';
+import '../../l10n/l10n.dart';
 import '../../models/deck_config.dart';
 import '../../models/track.dart';
 import 'deck_cubit.dart';
@@ -119,7 +120,7 @@ class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 8, 8, 4),
+      padding: const EdgeInsetsDirectional.fromSTEB(12, 8, 8, 4),
       child: Row(
         children: [
           Text(
@@ -143,8 +144,8 @@ class _Header extends StatelessWidget {
               track != null
                   ? '${track!.artist} — ${track!.title}'
                   : state.config.partyRole == null
-                      ? 'Přetáhni track sem'
-                      : 'Čeká na frontu',
+                      ? context.l10n.deckDropHint
+                      : context.l10n.deckWaitingForQueue,
               style: const TextStyle(color: Colors.white70, fontSize: 11),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -554,7 +555,7 @@ class _EqKillRow extends StatelessWidget {
           final (type, label, icon, color) = s;
           final active = enabled && (config.eqBands[type] ?? true);
           return Tooltip(
-            message: enabled ? '' : 'DSP nedostupné (HLS stream)',
+            message: enabled ? '' : context.l10n.dspUnavailable,
             child: GestureDetector(
               onTap: enabled ? () => cubit.toggleEqBand(type) : null,
               child: AnimatedContainer(
@@ -640,7 +641,7 @@ class _SliderRow extends StatelessWidget {
           child: Text(
             label,
             style: const TextStyle(color: Colors.white54, fontSize: 10),
-            textAlign: TextAlign.right,
+            textAlign: TextAlign.end,
           ),
         ),
       ],

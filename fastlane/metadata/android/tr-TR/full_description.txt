@@ -1,0 +1,19 @@
+DJfy telefonunu bir DJ kabinine ve parti müzik kutusuna dönüştürür.
+
+DECK'LER
+• Plak, sarma, tempo ve ses ayarlı 6 deck'e kadar
+• A ve B deck'leri arasında crossfader
+• EQ kill (LOW / MID / HIGH) ve FX pad: BPM'e senkron HI-LO, ECHO, REVERB, 8-BIT, ROLL
+
+SMART PLAYLIST
+• Bir grup ya da şarkı yaz, DJfy Last.fm üzerinden benzer parçaları bulsun
+• Akıcı bir mix için BPM'e göre sıralı
+
+PARTİ
+• Konuklar QR kodu tarar, tarayıcıda arar ve oy verir – uygulama ve hesap gerekmez
+• Akıllı sıra: oylar, bekleme süresi, BPM ve mood lock
+• Co-DJ, veto ve konuk engelleme
+• Crossfade ve beatmatch'li Auto-DJ; DURMADAN modu parçaları kendisi ekler
+• Ses AirPlay veya Bluetooth ile gider
+
+BPM verileri: GetSongBPM. Öneriler: Last.fm. Yayın: SoundCloud.

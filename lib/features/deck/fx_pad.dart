@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../app/theme.dart';
 import '../../models/deck_config.dart';
 import '../../models/fx.dart';
+import '../../l10n/l10n.dart';
 import 'deck_cubit.dart';
 
 /// Pacemaker-style FX section: effect selector chips + a momentary XY pad.
@@ -18,7 +19,7 @@ class FxSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final enabled = config.hasDsp;
     return Tooltip(
-      message: enabled ? '' : 'DSP nedostupné (HLS stream)',
+      message: enabled ? '' : context.l10n.dspUnavailable,
       child: Opacity(
         opacity: enabled ? 1.0 : 0.4,
         child: Column(
@@ -63,7 +64,7 @@ class _FxSelector extends StatelessWidget {
             onTap: available ? () => cubit.selectFx(type) : null,
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 150),
-              margin: const EdgeInsets.only(right: 6),
+              margin: const EdgeInsetsDirectional.only(end: 6),
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
                 color: selected ? type.color.withAlpha(50) : Colors.transparent,
@@ -100,7 +101,7 @@ class _FxSelector extends StatelessWidget {
             ),
           );
           if (type.needsBpm && enabled && config.track?.bpm == null) {
-            return Tooltip(message: 'BPM neznámé', child: chip);
+            return Tooltip(message: context.l10n.bpmUnknown, child: chip);
           }
           return chip;
         }).toList(),

@@ -1,0 +1,19 @@
+DJfy pretvara tvoj mobitel u DJ pult i jukebox za tulum.
+
+DECKOVI
+• Do 6 deckova s vinilom, premotavanjem, tempom i glasnoćom
+• Crossfader između deckova A i B
+• EQ kill (LOW / MID / HIGH) i FX pad: HI-LO, ECHO, REVERB, 8-BIT, ROLL u ritmu BPM-a
+
+SMART PLAYLIST
+• Upiši bend ili pjesmu i DJfy pronalazi slične pjesme preko Last.fm-a
+• Poredane po BPM-u za gladak miks
+
+TULUM
+• Gosti skeniraju QR kôd, traže i glasaju u pregledniku – bez aplikacije i bez računa
+• Pametni red: glasovi, čekanje, BPM i mood lock
+• Co-DJ, veto i blokiranje gostiju
+• Auto-DJ s crossfadeom i beatmatchingom; način BEZ PRESTANKA sam dodaje pjesme
+• Zvuk ide preko AirPlaya ili Bluetootha
+
+BPM podaci: GetSongBPM. Preporuke: Last.fm. Streaming: SoundCloud.

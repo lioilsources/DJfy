@@ -5,6 +5,7 @@ import 'package:dj_deckify/features/mixer/mixer_cubit.dart';
 import 'package:dj_deckify/features/party/auto_picker.dart';
 import 'package:dj_deckify/features/party/party_cubit.dart';
 import 'package:dj_deckify/features/party/party_player.dart';
+import 'package:dj_deckify/l10n/l10n.dart';
 import 'package:dj_deckify/models/deck_config.dart';
 import 'package:dj_deckify/models/track.dart';
 import 'package:dj_deckify/services/lastfm_service.dart';
@@ -283,7 +284,7 @@ void main() {
     await settle();
 
     expectInSync(t1);
-    expect(toasts, ['Fronta je prázdná']);
+    expect(toasts, [deviceStrings().queueEmpty]);
     await sub.cancel();
   });
 

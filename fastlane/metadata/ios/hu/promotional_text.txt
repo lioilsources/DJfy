@@ -1,0 +1,1 @@
+A telefonod a DJ: a vendégek beolvassák a QR-kódot és a böngészőben szavaznak a sorról, az Auto-DJ zökkenőmentesen kever.

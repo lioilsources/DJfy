@@ -1,0 +1,19 @@
+Το DJfy κάνει το κινητό σου κονσόλα DJ και jukebox για πάρτι.
+
+DECKS
+• Έως 6 decks με βινύλιο, αναζήτηση, τέμπο και ένταση
+• Crossfader ανάμεσα στα decks A και B
+• EQ kill (LOW / MID / HIGH) και FX pad: HI-LO, ECHO, REVERB, 8-BIT, ROLL στον ρυθμό του BPM
+
+SMART PLAYLIST
+• Γράψε ένα συγκρότημα ή τραγούδι και το DJfy βρίσκει παρόμοια κομμάτια μέσω Last.fm
+• Ταξινομημένα κατά BPM για ομαλή μίξη
+
+ΠΑΡΤΙ
+• Οι καλεσμένοι σκανάρουν το QR, ψάχνουν και ψηφίζουν στον browser – χωρίς εφαρμογή και λογαριασμό
+• Έξυπνη ουρά: ψήφοι, χρόνος αναμονής, BPM και mood lock
+• Co-DJ, βέτο και αποκλεισμός καλεσμένων
+• Auto-DJ με crossfade και beatmatching· η λειτουργία NON-STOP προσθέτει κομμάτια μόνη της
+• Ήχος μέσω AirPlay ή Bluetooth
+
+Δεδομένα BPM: GetSongBPM. Προτάσεις: Last.fm. Streaming: SoundCloud.

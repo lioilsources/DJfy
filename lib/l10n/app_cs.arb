@@ -1,0 +1,267 @@
+{
+  "@@locale": "cs",
+  "partyBarStatus": "{title} · fronta: {count}",
+  "@partyBarStatus": {
+    "description": "Live party bar above the decks: now playing title and queue length",
+    "placeholders": {
+      "title": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "partyWithCode": "Party {code}",
+  "@partyWithCode": {
+    "description": "Party label with its join code when nothing plays",
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "addDeck": "PŘIDAT DECK",
+  "@addDeck": {
+    "description": "Button that adds another DJ deck"
+  },
+  "deckDropHint": "Přetáhni track sem",
+  "@deckDropHint": {
+    "description": "Empty deck hint"
+  },
+  "deckWaitingForQueue": "Čeká na frontu",
+  "@deckWaitingForQueue": {
+    "description": "Empty deck during a party"
+  },
+  "dspUnavailable": "DSP nedostupné (HLS stream)",
+  "@dspUnavailable": {
+    "description": "Tooltip when effects are unavailable for a stream"
+  },
+  "bpmUnknown": "BPM neznámé",
+  "@bpmUnknown": {
+    "description": "Tooltip for beat-synced effects without tempo"
+  },
+  "genericError": "Chyba",
+  "@genericError": {
+    "description": "Generic error title"
+  },
+  "partyTagline": "Tvůj telefon je DJ. Reproduktor je jen reproduktor.",
+  "@partyTagline": {
+    "description": "Party start screen headline"
+  },
+  "partyIntro": "Hosté naskenují QR, hledají a hlasují v prohlížeči – bez appky a bez účtu. Fronta žije u tebe, zvuk pošleš přes AirPlay nebo Bluetooth.",
+  "@partyIntro": {
+    "description": "Party start screen explanation"
+  },
+  "partyNameLabel": "Název party",
+  "@partyNameLabel": {
+    "description": "Text field label"
+  },
+  "startParty": "ZALOŽIT PARTY",
+  "@startParty": {
+    "description": "Button that starts a party"
+  },
+  "back": "ZPĚT",
+  "@back": {
+    "description": "Back button"
+  },
+  "qrForGuests": "QR pro hosty",
+  "@qrForGuests": {
+    "description": "Tooltip of the QR button"
+  },
+  "endParty": "Ukončit party",
+  "@endParty": {
+    "description": "Tooltip of the end party button"
+  },
+  "endPartyQuestion": "Ukončit party?",
+  "@endPartyQuestion": {
+    "description": "Confirmation dialog title"
+  },
+  "endPartyWarning": "Hosté se odpojí a fronta se smaže.",
+  "@endPartyWarning": {
+    "description": "Confirmation dialog body"
+  },
+  "no": "NE",
+  "@no": {
+    "description": "Dialog button: no"
+  },
+  "endAction": "UKONČIT",
+  "@endAction": {
+    "description": "Dialog button: end the party"
+  },
+  "tabQueue": "FRONTA",
+  "@tabQueue": {
+    "description": "Tab: queue"
+  },
+  "tabGuests": "HOSTÉ",
+  "@tabGuests": {
+    "description": "Tab: guests"
+  },
+  "tabSearch": "HLEDAT",
+  "@tabSearch": {
+    "description": "Tab: search"
+  },
+  "copyLink": "KOPÍROVAT ODKAZ",
+  "@copyLink": {
+    "description": "Button that copies the join link"
+  },
+  "queueEmpty": "Fronta je prázdná",
+  "@queueEmpty": {
+    "description": "Shown when the party queue is empty"
+  },
+  "readyPressPlay": "Připraveno – zmáčkni ▶",
+  "@readyPressPlay": {
+    "description": "Nothing plays yet but the queue has tracks"
+  },
+  "addedBy": "přidal(a) {name}",
+  "@addedBy": {
+    "description": "Who added the playing track",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "keepGoing": "NEKONČIT",
+  "@keepGoing": {
+    "description": "Switch label: keep the party going when the queue runs dry"
+  },
+  "moodLock": "Mood lock",
+  "@moodLock": {
+    "description": "Feature name: lock the BPM range"
+  },
+  "moodLockHint": "Skladby mimo rozsah zůstanou ve frontě, ale nezahrají se samy.",
+  "@moodLockHint": {
+    "description": "Mood lock dialog hint"
+  },
+  "turnOff": "VYPNOUT",
+  "@turnOff": {
+    "description": "Dialog button: turn the mood lock off"
+  },
+  "lockAction": "ZAMKNOUT",
+  "@lockAction": {
+    "description": "Dialog button: lock the BPM range"
+  },
+  "queueEmptyHint": "Zatím nic. Přidej skladbu nebo ukaž hostům QR.",
+  "@queueEmptyHint": {
+    "description": "Empty queue tab"
+  },
+  "vetoBadge": "VETO",
+  "@vetoBadge": {
+    "description": "Swipe-to-veto background label"
+  },
+  "vetoMenu": "Veto",
+  "@vetoMenu": {
+    "description": "Menu item: veto a track"
+  },
+  "playNow": "Hrát hned",
+  "@playNow": {
+    "description": "Menu item"
+  },
+  "playNext": "Hrát příští",
+  "@playNext": {
+    "description": "Menu item: pin as next"
+  },
+  "unpin": "Odepnout",
+  "@unpin": {
+    "description": "Menu item: unpin"
+  },
+  "noGuestsYet": "Zatím nikdo nedorazil",
+  "@noGuestsYet": {
+    "description": "Empty guests tab"
+  },
+  "coDjSubtitle": "co-DJ · hlas ×{weight}, může dát veto",
+  "@coDjSubtitle": {
+    "description": "Guest list subtitle for a co-DJ; weight is the vote multiplier",
+    "placeholders": {
+      "weight": {
+        "type": "int"
+      }
+    }
+  },
+  "guestRole": "host",
+  "@guestRole": {
+    "description": "Guest list subtitle for a regular guest (a guest, not the host)"
+  },
+  "removeCoDj": "Odebrat co-DJ",
+  "@removeCoDj": {
+    "description": "Tooltip"
+  },
+  "promoteCoDj": "Povýšit na co-DJ",
+  "@promoteCoDj": {
+    "description": "Tooltip"
+  },
+  "blockGuest": "Zablokovat",
+  "@blockGuest": {
+    "description": "Tooltip: ban a guest"
+  },
+  "searchSoundCloudHint": "Hledat na SoundCloudu…",
+  "@searchSoundCloudHint": {
+    "description": "Search field hint"
+  },
+  "trackAdded": "„{title}“ přidáno",
+  "@trackAdded": {
+    "description": "Snackbar after adding a track",
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "playlistSearchHint": "Interpret nebo Interpret - Song...",
+  "@playlistSearchHint": {
+    "description": "Smart playlist search hint"
+  },
+  "playlistIdle": "Zadej kapelu nebo song",
+  "@playlistIdle": {
+    "description": "Smart playlist empty state"
+  },
+  "searchingFor": "Hledám „{query}“…",
+  "@searchingFor": {
+    "description": "Smart playlist loading",
+    "placeholders": {
+      "query": {
+        "type": "String"
+      }
+    }
+  },
+  "similarByBpm": "Podobné (seřazeno dle BPM)",
+  "@similarByBpm": {
+    "description": "Smart playlist section header"
+  },
+  "errorWithMessage": "Chyba: {message}",
+  "@errorWithMessage": {
+    "description": "Error with details",
+    "placeholders": {
+      "message": {
+        "type": "String"
+      }
+    }
+  },
+  "toastNoNextTrack": "Nenašel jsem další skladbu – přidej nějakou do fronty",
+  "@toastNoNextTrack": {
+    "description": "Host toast"
+  },
+  "toastPickingNext": "Vybírám další skladbu…",
+  "@toastPickingNext": {
+    "description": "Host toast"
+  },
+  "toastCannotPlay": "Nejde přehrát „{title}“ – přeskakuju",
+  "@toastCannotPlay": {
+    "description": "Host toast",
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "relayUnavailable": "Relay nedostupný: {error}",
+  "@relayUnavailable": {
+    "description": "Party could not connect to the relay server",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  }
+}
