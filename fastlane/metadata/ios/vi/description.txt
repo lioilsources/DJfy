@@ -1,0 +1,19 @@
+DJfy biến điện thoại của bạn thành bàn DJ và máy hát cho bữa tiệc.
+
+DECK
+• Tối đa 6 deck với đĩa than, tua, tempo và âm lượng
+• Crossfader giữa deck A và B
+• EQ kill (LOW / MID / HIGH) và bảng FX: HI-LO, ECHO, REVERB, 8-BIT, ROLL theo nhịp BPM
+
+SMART PLAYLIST
+• Nhập tên ban nhạc hoặc bài hát, DJfy sẽ tìm bản nhạc tương tự qua Last.fm
+• Sắp xếp theo BPM để mix mượt
+
+BỮA TIỆC
+• Khách quét mã QR, tìm kiếm và bình chọn trên trình duyệt – không cần ứng dụng, không cần tài khoản
+• Hàng chờ thông minh: phiếu bầu, thời gian chờ, BPM và mood lock
+• Co-DJ, phủ quyết và chặn khách
+• Auto-DJ với crossfade và beatmatch; chế độ KHÔNG NGỪNG tự thêm bài
+• Âm thanh qua AirPlay hoặc Bluetooth
+
+Dữ liệu BPM: GetSongBPM. Gợi ý: Last.fm. Phát trực tuyến: SoundCloud.

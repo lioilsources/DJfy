@@ -1,0 +1,19 @@
+DJfy mengubah ponselmu menjadi booth DJ dan jukebox pesta.
+
+DECK
+• Hingga 6 deck dengan piringan hitam, seek, tempo, dan volume
+• Crossfader antara deck A dan B
+• EQ kill (LOW / MID / HIGH) dan pad FX: HI-LO, ECHO, REVERB, 8-BIT, ROLL mengikuti BPM
+
+SMART PLAYLIST
+• Masukkan band atau lagu, DJfy menemukan trek serupa lewat Last.fm
+• Diurutkan menurut BPM untuk mix yang mulus
+
+PESTA
+• Tamu memindai kode QR, mencari, dan memilih di browser – tanpa aplikasi dan tanpa akun
+• Antrean pintar: suara, waktu tunggu, BPM, dan mood lock
+• Co-DJ, veto, dan blokir tamu
+• Auto-DJ dengan crossfade dan beatmatch; mode NONSTOP menambah trek sendiri
+• Suara lewat AirPlay atau Bluetooth
+
+Data BPM: GetSongBPM. Rekomendasi: Last.fm. Streaming: SoundCloud.

@@ -1,0 +1,19 @@
+DJfy tekee puhelimestasi DJ-kopin ja bilejukeboksin.
+
+DECKIT
+• Jopa 6 deckiä: vinyyli, kelaus, tempo ja äänenvoimakkuus
+• Crossfader deckien A ja B välillä
+• EQ kill (LOW / MID / HIGH) ja FX-pad: HI-LO, ECHO, REVERB, 8-BIT, ROLL BPM:n tahdissa
+
+SMART PLAYLIST
+• Kirjoita bändi tai kappale, niin DJfy löytää samankaltaisia kappaleita Last.fm:n kautta
+• BPM-järjestyksessä sujuvaa miksausta varten
+
+BILEET
+• Vieraat skannaavat QR-koodin, hakevat ja äänestävät selaimessa – ilman sovellusta ja tiliä
+• Älykäs jono: äänet, odotusaika, BPM ja mood lock
+• Co-DJ:t, veto ja vieraiden esto
+• Auto-DJ ristihäivytyksellä ja tahdistuksella; NON-STOP-tila lisää kappaleita itse
+• Ääni AirPlayn tai Bluetoothin kautta
+
+BPM-tiedot: GetSongBPM. Suositukset: Last.fm. Suoratoisto: SoundCloud.

@@ -1,0 +1,19 @@
+A DJfy DJ-pulttá és buli-zenegéppé alakítja a telefonodat.
+
+DECKEK
+• Akár 6 deck bakelittel, tekeréssel, tempóval és hangerővel
+• Crossfader az A és B deck között
+• EQ kill (LOW / MID / HIGH) és FX-pad: HI-LO, ECHO, REVERB, 8-BIT, ROLL a BPM ütemére
+
+SMART PLAYLIST
+• Írj be egy zenekart vagy dalt, és a DJfy a Last.fm segítségével hasonló számokat talál
+• BPM szerint rendezve a folyamatos keveréshez
+
+BULI
+• A vendégek beolvassák a QR-kódot, keresnek és szavaznak a böngészőben – app és fiók nélkül
+• Okos sor: szavazatok, várakozás, BPM és mood lock
+• Co-DJ-k, vétó és vendégek letiltása
+• Auto-DJ átúsztatással és beatmatchinggel; a NON-STOP mód magától tölti a sort
+• Hang AirPlayen vagy Bluetoothon
+
+BPM-adatok: GetSongBPM. Ajánlások: Last.fm. Streaming: SoundCloud.

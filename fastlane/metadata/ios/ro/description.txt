@@ -1,0 +1,19 @@
+DJfy îți transformă telefonul într-o cabină de DJ și un tonomat de petrecere.
+
+DECKURI
+• Până la 6 deckuri cu vinil, derulare, tempo și volum
+• Crossfader între deckurile A și B
+• EQ kill (LOW / MID / HIGH) și pad FX: HI-LO, ECHO, REVERB, 8-BIT, ROLL pe ritmul BPM
+
+SMART PLAYLIST
+• Introdu o trupă sau o piesă, iar DJfy găsește piese similare prin Last.fm
+• Sortate după BPM pentru un mix fluid
+
+PETRECERE
+• Invitații scanează codul QR, caută și votează în browser – fără aplicație și fără cont
+• Coadă inteligentă: voturi, timp de așteptare, BPM și mood lock
+• Co-DJ, veto și blocarea invitaților
+• Auto-DJ cu crossfade și beatmatching; modul NON-STOP adaugă piese singur
+• Sunetul pleacă prin AirPlay sau Bluetooth
+
+Date BPM: GetSongBPM. Recomandări: Last.fm. Streaming: SoundCloud.

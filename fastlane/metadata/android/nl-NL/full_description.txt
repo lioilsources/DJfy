@@ -1,0 +1,19 @@
+DJfy maakt van je telefoon een dj-booth en een feestjukebox.
+
+DECKS
+• Tot 6 decks met vinyl, zoeken, tempo en volume
+• Crossfader tussen deck A en B
+• EQ-kills (LOW / MID / HIGH) en een FX-pad: HI-LO, ECHO, REVERB, 8-BIT, ROLL op de BPM
+
+SMART PLAYLIST
+• Voer een band of nummer in en DJfy vindt vergelijkbare tracks via Last.fm
+• Gesorteerd op BPM voor een vloeiende mix
+
+FEEST
+• Gasten scannen de QR-code, zoeken en stemmen in de browser – zonder app en zonder account
+• Slimme wachtrij: stemmen, wachttijd, BPM en mood lock
+• Co-dj’s, veto’s en gasten blokkeren
+• Auto-DJ met crossfade en beatmatching; de NON-STOP-modus voegt zelf tracks toe
+• Geluid via AirPlay of Bluetooth
+
+BPM-gegevens: GetSongBPM. Aanbevelingen: Last.fm. Streaming: SoundCloud.

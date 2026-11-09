@@ -1,0 +1,19 @@
+DJfy menjadikan telefon anda booth DJ dan jukebox parti.
+
+DEK
+• Sehingga 6 dek dengan piring hitam, cari, tempo dan kelantangan
+• Crossfader antara dek A dan B
+• EQ kill (LOW / MID / HIGH) dan pad FX: HI-LO, ECHO, REVERB, 8-BIT, ROLL mengikut BPM
+
+SMART PLAYLIST
+• Masukkan kumpulan atau lagu, DJfy mencari trek serupa melalui Last.fm
+• Diisih mengikut BPM untuk adunan yang lancar
+
+PARTI
+• Tetamu mengimbas kod QR, mencari dan mengundi dalam pelayar – tanpa apl dan tanpa akaun
+• Baris gilir pintar: undian, masa menunggu, BPM dan mood lock
+• Co-DJ, veto dan sekat tetamu
+• Auto-DJ dengan crossfade dan beatmatch; mod TANPA HENTI menambah trek sendiri
+• Bunyi melalui AirPlay atau Bluetooth
+
+Data BPM: GetSongBPM. Cadangan: Last.fm. Penstriman: SoundCloud.

@@ -1,0 +1,19 @@
+DJfy trasforma il tuo telefono in una console da DJ e in un jukebox per le feste.
+
+DECK
+• Fino a 6 deck con vinile, ricerca, tempo e volume
+• Crossfader tra i deck A e B
+• EQ kill (LOW / MID / HIGH) e pad FX: HI-LO, ECHO, REVERB, 8-BIT, ROLL a tempo di BPM
+
+SMART PLAYLIST
+• Inserisci una band o un brano e DJfy trova brani simili tramite Last.fm
+• Ordinati per BPM per un mix fluido
+
+FESTA
+• Gli ospiti scansionano il QR, cercano e votano nel browser – senza app e senza account
+• Coda intelligente: voti, attesa, BPM e mood lock
+• Co-DJ, veto e blocco degli ospiti
+• Auto-DJ con crossfade e beatmatching; la modalità NON-STOP aggiunge brani da sola
+• L’audio va via AirPlay o Bluetooth
+
+Dati BPM: GetSongBPM. Consigli: Last.fm. Streaming: SoundCloud.
