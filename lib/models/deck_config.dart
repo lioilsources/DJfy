@@ -29,6 +29,9 @@ class DeckConfig {
   final bool fxActive;
   final double fxX;
   final double fxY;
+
+  /// The FX stays on after the finger lifts, until unlatched.
+  final bool fxLatched;
   final PartyDeckRole? partyRole;
 
   /// Slip mode: after a scratch the track carries on where it would have been.
@@ -58,6 +61,7 @@ class DeckConfig {
     this.fxActive = false,
     this.fxX = 0.5,
     this.fxY = 0.5,
+    this.fxLatched = false,
     this.partyRole,
     this.slip = false,
     this.waveform,
@@ -77,6 +81,7 @@ class DeckConfig {
     bool? fxActive,
     double? fxX,
     double? fxY,
+    bool? fxLatched,
     PartyDeckRole? partyRole,
     bool clearPartyRole = false,
     bool? slip,
@@ -98,6 +103,7 @@ class DeckConfig {
       fxActive: fxActive ?? this.fxActive,
       fxX: fxX ?? this.fxX,
       fxY: fxY ?? this.fxY,
+      fxLatched: fxLatched ?? this.fxLatched,
       partyRole: clearPartyRole ? null : (partyRole ?? this.partyRole),
       slip: slip ?? this.slip,
       waveform: clearWaveform ? null : (waveform ?? this.waveform),

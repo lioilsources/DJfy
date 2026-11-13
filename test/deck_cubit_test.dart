@@ -273,6 +273,50 @@ void main() {
       expect(engine.follows[1]!.last, isNull);
     });
 
+    test('BRAKE on the pad coasts to a stop; letting go spins it back up', () async {
+      engine.reversible.add(1);
+      await loaded();
+      deck.selectFx(FxType.brake);
+      deck.fxStart(0, 0.5); // 0.25 s
+      await ms(400);
+      expect(engine.playing, isEmpty);
+      deck.fxEnd();
+      expect(engine.playing, {1});
+      await ms(30);
+      expect(engine.rates[1]!.last, inExclusiveRange(0, 1));
+      await ms(700);
+      expect(engine.rates[1]!.last, 1);
+    });
+
+    test('SPIN needs a PCM deck and plays backwards', () async {
+      await loaded();
+      deck.selectFx(FxType.spin);
+      expect(deck.fxAvailable(FxType.spin), isFalse);
+    });
+
+    test('SPIN on a PCM deck throws the record backwards', () async {
+      engine.reversible.add(1);
+      await loaded();
+      deck.selectFx(FxType.spin);
+      deck.fxStart(0.5, 1); // 4× backwards
+      await ms(40);
+      expect(engine.rates[1]!.any((r) => r < -3), isTrue);
+      deck.fxEnd();
+    });
+
+    test('a latched effect stays on after the finger lifts', () async {
+      engine.reversible.add(1);
+      await loaded();
+      deck.selectFx(FxType.hiLo);
+      deck.toggleFxLatch();
+      deck.fxStart(0.2, 0.5);
+      deck.fxEnd();
+      expect(deck.state.config.fxActive, isTrue);
+      deck.toggleFxLatch(); // unlatch with no finger on the pad
+      expect(deck.state.config.fxActive, isFalse);
+      expect(engine.cleared, [FxType.hiLo]);
+    });
+
     test('the NEXT deck of a party cannot be scratched', () async {
       await loaded();
       deck.setPartyRole(PartyDeckRole.next);

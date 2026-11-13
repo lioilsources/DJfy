@@ -89,6 +89,21 @@ class Platter {
     if (!motorOn) _velocity = 0; // no motor: the record stays where it was let go
   }
 
+  /// Backspin: thrown backwards at [strength]× normal speed, coasting to a
+  /// stop over [seconds]; the motor is off afterwards.
+  void backspin(double strength, double seconds) {
+    if (mode == PlatterMode.touched) return;
+    mode = PlatterMode.braking;
+    _brakeTime = math.max(seconds, 0.05);
+    _velocity = _brakeFrom = -strength * nominalRadPerSec;
+  }
+
+  /// Motor back on from wherever the record is: it spins up, no jump.
+  void spinUp() {
+    motorOn = true;
+    mode = PlatterMode.motor;
+  }
+
   /// Coast to a stop over [seconds]; the motor is off afterwards.
   void brake(double seconds) {
     if (!motorOn || mode == PlatterMode.touched) return;
@@ -108,7 +123,7 @@ class Platter {
         if ((_velocity - target).abs() < 1e-3 * nominalRadPerSec) _velocity = target;
       case PlatterMode.braking:
         _velocity -= _brakeFrom * seconds / _brakeTime;
-        if (_velocity <= 0) {
+        if (_brakeFrom >= 0 ? _velocity <= 0 : _velocity >= 0) {
           _velocity = 0;
           motorOn = false;
           mode = PlatterMode.motor;

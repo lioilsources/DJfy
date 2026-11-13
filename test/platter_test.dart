@@ -87,4 +87,20 @@ void main() {
     run(p, 0.5);
     expect(p.rate, 0);
   });
+
+  test('backspin throws the record backwards, it coasts to a stop and spins up again', () {
+    final p = Platter()..setMotor(true);
+    p.backspin(3, 1);
+    expect(p.rate, closeTo(-3, 1e-9));
+    run(p, 0.5);
+    expect(p.rate, closeTo(-1.5, 0.1));
+    run(p, 0.55);
+    expect(p.rate, 0);
+    expect(p.motorOn, isFalse);
+    p.spinUp();
+    run(p, 0.05);
+    expect(p.rate, inExclusiveRange(0, 1));
+    run(p, 1);
+    expect(p.rate, 1);
+  });
 }

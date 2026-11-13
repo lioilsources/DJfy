@@ -283,17 +283,39 @@ class DeckCubit extends Cubit<DeckState> {
   bool get _fxUsable => state is DeckReady && state.config.hasDsp;
 
   bool fxAvailable(FxType type) =>
-      _fxUsable && (!type.needsBpm || state.config.track?.bpm != null);
+      _fxUsable &&
+      (!type.needsBpm || state.config.track?.bpm != null) &&
+      (!type.needsPcm || _engine.canReverse(deckId));
+
+  /// A finger is on the pad (a latched FX stays on without one).
+  bool _fxTouching = false;
+
+  /// Brake or spin actually stopped the record: release spins it back up.
+  bool _fxStopped = false;
 
   void selectFx(FxType type) {
     if (state is! DeckReady) return;
     if (state.config.fxActive) _endFxGesture();
-    emit(DeckReady(state.config.copyWith(selectedFx: type, fxActive: false)));
+    emit(DeckReady(state.config.copyWith(selectedFx: type, fxActive: false, fxLatched: false)));
+  }
+
+  /// Latch: the effect keeps going with the last x/y after the finger lifts.
+  void toggleFxLatch() {
+    if (state is! DeckReady || !state.config.selectedFx.latchable) return;
+    final latched = !state.config.fxLatched;
+    emit(DeckReady(state.config.copyWith(fxLatched: latched)));
+    if (!latched && state.config.fxActive && !_fxTouching) fxEnd();
   }
 
   void fxStart(double x, double y) {
     final type = state.config.selectedFx;
     if (!fxAvailable(type)) return;
+    _fxTouching = true;
+    // Latched and running: touching again just moves it.
+    if (state.config.fxActive && state.config.fxLatched) {
+      fxUpdate(x, y);
+      return;
+    }
     _fxThrottle = Stopwatch()..start();
 
     switch (type) {
@@ -302,6 +324,12 @@ class DeckCubit extends Cubit<DeckState> {
       case FxType.beatskip:
         _beatskipBucket = FxParamMapper.beatskipBeats(x);
         _skipBeats(_beatskipBucket!);
+      case FxType.brake:
+        _fxStopped = state.config.isPlaying;
+        brake(FxParamMapper.brakeSeconds(x));
+      case FxType.spin:
+        _fxStopped = state.config.isPlaying;
+        backspin(FxParamMapper.spinStrength(y), FxParamMapper.spinSeconds(x));
       default:
         _engine.setFx(deckId, type, x, y,
             beatDuration: _beatClock.beatDuration, engage: true);
@@ -328,6 +356,9 @@ class DeckCubit extends Cubit<DeckState> {
           _beatskipBucket = bucket;
           _skipBeats(bucket);
         }
+      case FxType.brake:
+      case FxType.spin:
+        break; // decided at touch-down; the release spins it back up
       default:
         _engine.setFx(deckId, type, x, y,
             beatDuration: _beatClock.beatDuration);
@@ -336,17 +367,24 @@ class DeckCubit extends Cubit<DeckState> {
   }
 
   void fxEnd() {
+    _fxTouching = false;
     if (state is! DeckReady || !state.config.fxActive) return;
-    _endFxGesture();
+    if (state.config.fxLatched && state.config.selectedFx.latchable) return;
+    _endFxGesture(resume: true);
     emit(DeckReady(state.config.copyWith(fxActive: false)));
   }
 
-  void _endFxGesture() {
+  /// [resume]: the finger let go of brake/spin, so the motor starts again
+  /// (not when a new track or another effect ends the gesture).
+  void _endFxGesture({bool resume = false}) {
     final type = state.config.selectedFx;
     if (type == FxType.roll && _rollStopwatch != null) {
       _stopRoll();
     } else if (type == FxType.beatskip) {
       _beatskipBucket = null;
+    } else if (type == FxType.brake || type == FxType.spin) {
+      if (resume && _fxStopped) _spinUp();
+      _fxStopped = false;
     } else if (state.config.fxActive) {
       _engine.clearFx(deckId, type);
     }
@@ -497,6 +535,25 @@ class DeckCubit extends Cubit<DeckState> {
     if (state is! DeckReady || !state.config.isPlaying || _touchTarget != null) return;
     _braking = true;
     _platter.brake(seconds);
+    _runPlatter();
+  }
+
+  /// Backspin: the record is thrown backwards and coasts to a stop (PCM decks).
+  void backspin(double strength, double seconds) {
+    if (state is! DeckReady || !state.config.isPlaying || _touchTarget != null) return;
+    if (!_engine.canReverse(deckId)) return;
+    _braking = true;
+    _platter.backspin(strength, seconds);
+    _runPlatter();
+  }
+
+  /// Motor on again from wherever the record is (after brake or spin).
+  void _spinUp() {
+    if (state is! DeckReady) return;
+    _braking = false;
+    _platter.spinUp();
+    _sendRate(_platter.rate, force: true);
+    unawaited(_engine.play(deckId));
     _runPlatter();
   }
 

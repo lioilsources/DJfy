@@ -80,8 +80,18 @@ class _DeckWidgetState extends State<DeckWidget> {
                     onToggleFx: (v) => setState(() => _showFx = v),
                   ),
                   Expanded(
+                    // FX mode keeps a smaller platter in view: scratch with one
+                    // hand while the other plays the pad.
                     child: _showFx
-                        ? FxSection(config: config, cubit: cubit)
+                        ? Column(
+                            children: [
+                              Expanded(
+                                flex: 2,
+                                child: _VinylArea(progress: progress, track: track, config: config, cubit: cubit),
+                              ),
+                              Expanded(flex: 3, child: FxSection(config: config, cubit: cubit)),
+                            ],
+                          )
                         : _VinylArea(
                             progress: progress,
                             track: track,
@@ -319,7 +329,7 @@ class _VinylAreaState extends State<_VinylArea> with SingleTickerProviderStateMi
     final track = widget.track;
     return LayoutBuilder(
       builder: (ctx, constraints) {
-        _size = math.min(constraints.maxWidth, constraints.maxHeight).clamp(80.0, 200.0);
+        _size = math.min(constraints.maxWidth, constraints.maxHeight).clamp(40.0, 200.0);
         final size = _size;
         final record = Stack(
           alignment: Alignment.center,

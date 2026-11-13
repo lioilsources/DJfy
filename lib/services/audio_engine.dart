@@ -66,9 +66,19 @@ class FxParamMapper {
   static double echoWet(double y) => y * 0.8;
   static double echoDecay(double y) => 0.3 + y * 0.6;
 
-  /// 8-bit samplerate crush, exponential 22 kHz → 800 Hz.
-  static double eightBitSamplerate(double x) =>
+  /// Crush samplerate, exponential 22 kHz → 800 Hz.
+  static double crushSamplerate(double x) =>
       22000 * math.pow(800 / 22000, x).toDouble();
+
+  /// Crush bit depth: 8 bits at the bottom of the pad, 2 at the top.
+  static double crushBitdepth(double y) => 8 - y * 6;
+
+  /// Brake: how long the record takes to coast to a stop.
+  static double brakeSeconds(double x) => 0.25 + x * 1.75;
+
+  /// Spin: how long the backspin lasts, and how hard it's thrown.
+  static double spinSeconds(double x) => 0.5 + x * 1.5;
+  static double spinStrength(double y) => 1 + y * 3;
 
   /// Roll slice length in beats: {1/2, 1/4, 1/8, 1/16}.
   static double rollBeats(double x) => switch ((x * 4).floor().clamp(0, 3)) {
@@ -500,7 +510,7 @@ class AudioEngine {
   /// Applies a continuous FX with pad coordinates x, y ∈ [0, 1].
   /// [beatDuration] is used by echo for beat-synced delays.
   ///
-  /// Roll and beatskip are seek-based and live in DeckCubit, not here.
+  /// Roll, beatskip, brake and spin move the playhead and live in DeckCubit.
   void setFx(
     int deckId,
     FxType type,
@@ -558,13 +568,15 @@ class AudioEngine {
         case FxType.reverb:
           f.freeverbFilter.roomSize(soundHandle: h).value = x;
           apply(f.freeverbFilter.wet(soundHandle: h), y);
-        case FxType.eightBit:
+        case FxType.crush:
           f.lofiFilter.samplerate(soundHandle: h).value =
-              FxParamMapper.eightBitSamplerate(x);
-          f.lofiFilter.bitdepth(soundHandle: h).value = 5;
-          apply(f.lofiFilter.wet(soundHandle: h), y);
+              FxParamMapper.crushSamplerate(x);
+          f.lofiFilter.bitdepth(soundHandle: h).value = FxParamMapper.crushBitdepth(y);
+          apply(f.lofiFilter.wet(soundHandle: h), 1);
         case FxType.roll:
         case FxType.beatskip:
+        case FxType.brake:
+        case FxType.spin:
           break;
       }
     } catch (e) {
@@ -593,12 +605,14 @@ class AudioEngine {
           f.freeverbFilter
               .wet(soundHandle: h)
               .fadeFilterParameter(to: 0, time: fade);
-        case FxType.eightBit:
+        case FxType.crush:
           f.lofiFilter
               .wet(soundHandle: h)
               .fadeFilterParameter(to: 0, time: fade);
         case FxType.roll:
         case FxType.beatskip:
+        case FxType.brake:
+        case FxType.spin:
           break;
       }
     } catch (e) {

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:dj_deckify/core/track_analysis.dart';
+import 'package:dj_deckify/models/fx.dart';
 import 'package:dj_deckify/services/audio_engine.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_audio/just_audio.dart' show PlayerState, ProcessingState;
@@ -102,6 +103,12 @@ class FakeAudioEngine extends Fake implements AudioEngine {
   void loop(int deckId, Duration start, Duration length) => loops[deckId] = (start: start, length: length);
   @override
   void endLoop(int deckId) => loops[deckId] = null;
+
+  final cleared = <FxType>[];
+  @override
+  void setFx(int deckId, FxType type, double x, double y, {Duration? beatDuration, bool engage = false}) {}
+  @override
+  void clearFx(int deckId, FxType type) => cleared.add(type);
 
   final analyses = <int, TrackAnalysis>{};
   @override

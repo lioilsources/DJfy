@@ -48,8 +48,10 @@ void main() {
 
   group('FxParamMapper 8-bit', () {
     test('samplerate sweeps 22 kHz → 800 Hz', () {
-      expect(FxParamMapper.eightBitSamplerate(0), closeTo(22000, 1));
-      expect(FxParamMapper.eightBitSamplerate(1), closeTo(800, 1));
+      expect(FxParamMapper.crushSamplerate(0), closeTo(22000, 1));
+      expect(FxParamMapper.crushSamplerate(1), closeTo(800, 1));
+      expect(FxParamMapper.crushBitdepth(0), 8);
+      expect(FxParamMapper.crushBitdepth(1), 2);
     });
   });
 }
