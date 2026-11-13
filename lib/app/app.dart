@@ -95,7 +95,7 @@ class _HomeScreen extends StatelessWidget {
       body: const Column(
         children: [
           _PartyBar(),
-          PlaylistPanel(),
+          SearchBarButton(),
           Expanded(child: DeckScreen()),
         ],
       ),

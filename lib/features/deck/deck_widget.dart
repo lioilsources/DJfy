@@ -9,6 +9,7 @@ import '../../app/theme.dart';
 import '../../core/extensions.dart';
 import '../../models/deck_config.dart';
 import '../../models/track.dart';
+import '../playlist/playlist_screen.dart';
 import 'deck_cubit.dart';
 import 'deck_state.dart';
 import 'fx_pad.dart';
@@ -20,10 +21,9 @@ const _kColorMid = Color(0xFF43A047);
 const _kColorHigh = Color(0xFF1E88E5);
 
 class DeckWidget extends StatefulWidget {
-  final bool isDropTarget;
   final VoidCallback? onClose;
 
-  const DeckWidget({super.key, this.isDropTarget = false, this.onClose});
+  const DeckWidget({super.key, this.onClose});
 
   @override
   State<DeckWidget> createState() => _DeckWidgetState();
@@ -43,31 +43,14 @@ class _DeckWidgetState extends State<DeckWidget> {
         final progress =
             totalMs > 0 ? config.position.inMilliseconds / totalMs : 0.0;
 
-        return DragTarget<Track>(
-          onWillAcceptWithDetails: (_) => config.partyRole == null,
-          onAcceptWithDetails: (details) => cubit.loadTrack(details.data),
-          builder: (ctx, candidates, rejected) {
-            final hovering = candidates.isNotEmpty || widget.isDropTarget;
-            return ConstrainedBox(
-              constraints: const BoxConstraints(minWidth: 200, minHeight: 300),
-              child: Container(
+        return ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 200, minHeight: 300),
+          child: Container(
               margin: const EdgeInsets.all(6),
               decoration: BoxDecoration(
                 color: kCardBg,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: hovering ? kNeonPurple : kNeonCyan.withAlpha(40),
-                  width: hovering ? 2 : 1,
-                ),
-                boxShadow: hovering
-                    ? [
-                        BoxShadow(
-                          color: kNeonPurple.withAlpha(80),
-                          blurRadius: 16,
-                          spreadRadius: 2,
-                        )
-                      ]
-                    : null,
+                border: Border.all(color: kNeonCyan.withAlpha(40)),
               ),
               child: Column(
                 children: [
@@ -110,8 +93,6 @@ class _DeckWidgetState extends State<DeckWidget> {
                 ],
               ),
             ),
-            );
-          },
         );
       },
     );
@@ -158,15 +139,22 @@ class _Header extends StatelessWidget {
             const SizedBox(width: 6),
           ],
           Expanded(
-            child: Text(
-              track != null
-                  ? '${track!.artist} — ${track!.title}'
-                  : state.config.partyRole == null
-                      ? 'Přetáhni track sem'
-                      : 'Čeká na frontu',
-              style: const TextStyle(color: Colors.white70, fontSize: 11),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: state.config.partyRole == null ? () => openSearch(context) : null,
+              child: Text(
+                track != null
+                    ? '${track!.artist} — ${track!.title}'
+                    : state.config.partyRole == null
+                        ? 'Vybrat skladbu…'
+                        : 'Čeká na frontu',
+                style: TextStyle(
+                  color: track == null && state.config.partyRole == null ? kNeonCyan : Colors.white70,
+                  fontSize: 11,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ),
           if (track?.bpm != null)
