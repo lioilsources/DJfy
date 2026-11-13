@@ -34,6 +34,9 @@ void main() {
       );
       when(() => deck.state).thenReturn(DeckReady(config));
       when(() => deck.deckId).thenReturn(1);
+      when(() => deck.canScratch).thenReturn(true);
+      when(() => deck.platterAngle).thenReturn(0);
+      when(() => deck.platterIdle).thenReturn(true);
 
       await tester.pumpWidget(MaterialApp(
         home: Scaffold(

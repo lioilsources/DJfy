@@ -1,7 +1,9 @@
 import 'dart:math' as math;
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../app/theme.dart';
 import '../../core/extensions.dart';
@@ -204,7 +206,7 @@ class _PartyBadge extends StatelessWidget {
   }
 }
 
-class _VinylArea extends StatelessWidget {
+class _VinylArea extends StatefulWidget {
   final double progress;
   final Track? track;
   final DeckConfig config;
@@ -218,119 +220,206 @@ class _VinylArea extends StatelessWidget {
   });
 
   @override
+  State<_VinylArea> createState() => _VinylAreaState();
+}
+
+/// The platter: turns at 33⅓ rpm with the track, stops under a finger and
+/// scratches as the finger moves (one revolution = 1.8 s of track).
+class _VinylAreaState extends State<_VinylArea> with SingleTickerProviderStateMixin {
+  late final Ticker _ticker = createTicker((_) => _updateAngle());
+  final _angle = ValueNotifier<double>(0);
+  int? _pointer;
+  double? _lastAngle;
+  Duration? _lastTime;
+  double _size = 0;
+
+  bool get _enabled => widget.cubit.canScratch;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncTicker();
+  }
+
+  @override
+  void didUpdateWidget(covariant _VinylArea old) {
+    super.didUpdateWidget(old);
+    _syncTicker();
+  }
+
+  void _updateAngle() {
+    _angle.value = widget.cubit.platterAngle;
+    if (!widget.config.isPlaying && _pointer == null && widget.cubit.platterIdle) _ticker.stop();
+  }
+
+  /// Ticks only while the record can move, so an idle deck costs no frames.
+  void _syncTicker() {
+    final moving = widget.config.isPlaying || _pointer != null || !widget.cubit.platterIdle;
+    if (moving && !_ticker.isActive) {
+      _ticker.start();
+    } else if (!moving) {
+      _angle.value = widget.cubit.platterAngle;
+    }
+  }
+
+  ({double angle, double distance}) _polar(Offset local) {
+    final v = local - Offset(_size / 2, _size / 2);
+    return (angle: math.atan2(v.dy, v.dx), distance: v.distance);
+  }
+
+  void _down(PointerDownEvent e) {
+    if (!_enabled || _pointer != null) return;
+    _pointer = e.pointer;
+    _lastAngle = _polar(e.localPosition).angle;
+    _lastTime = e.timeStamp;
+    widget.cubit.platterTouch();
+    _syncTicker();
+  }
+
+  void _move(PointerMoveEvent e) {
+    if (e.pointer != _pointer) return;
+    final p = _polar(e.localPosition);
+    final last = _lastAngle!;
+    final dt = (e.timeStamp - _lastTime!).inMicroseconds / 1e6;
+    _lastAngle = p.angle;
+    _lastTime = e.timeStamp;
+    // Near the spindle a tiny move swings the angle wildly.
+    if (p.distance < _size * 0.08) return;
+    var delta = p.angle - last;
+    // Unwrap the ±π discontinuity so crossing it doesn't jump a turn.
+    if (delta > math.pi) delta -= 2 * math.pi;
+    if (delta < -math.pi) delta += 2 * math.pi;
+    widget.cubit.platterDrag(delta, dt);
+  }
+
+  void _up(PointerEvent e) {
+    if (e.pointer != _pointer) return;
+    _pointer = null;
+    _lastAngle = null;
+    widget.cubit.platterRelease();
+  }
+
+  @override
+  void dispose() {
+    _ticker.dispose();
+    _angle.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final track = widget.track;
     return LayoutBuilder(
       builder: (ctx, constraints) {
-        final size = constraints.maxWidth.clamp(80.0, 200.0);
-
-        return Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+        _size = math.min(constraints.maxWidth, constraints.maxHeight).clamp(80.0, 200.0);
+        final size = _size;
+        final record = Stack(
+          alignment: Alignment.center,
           children: [
-            _JogWheel(
-              size: size,
-              enabled: config.track != null,
-              cubit: cubit,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  SizedBox(
-                    width: size,
-                    height: size,
-                    child: CustomPaint(
-                      painter: VinylPainter(
-                        progressFraction: progress,
-                        accentColor: kNeonCyan,
-                        isPlaying: config.isPlaying,
-                      ),
-                    ),
+            SizedBox(
+              width: size,
+              height: size,
+              child: RepaintBoundary(
+                child: CustomPaint(
+                  painter: VinylPainter(
+                    progressFraction: widget.progress,
+                    accentColor: kNeonCyan,
+                    angle: _angle,
                   ),
-                  if (track?.artworkUrl != null)
-                    ClipOval(
-                      child: SizedBox(
-                        width: size * 0.25,
-                        height: size * 0.25,
-                        child: CachedNetworkImage(
-                          imageUrl: track!.artworkUrl!,
-                          fit: BoxFit.cover,
-                          errorWidget: (ctx, url, err) =>
-                              const Icon(Icons.music_note, size: 16),
-                        ),
-                      ),
-                    ),
-                ],
+                ),
               ),
             ),
+            if (track?.artworkUrl != null)
+              ValueListenableBuilder<double>(
+                valueListenable: _angle,
+                builder: (_, angle, child) => Transform.rotate(angle: angle, child: child),
+                child: ClipOval(
+                  child: SizedBox(
+                    width: size * 0.25,
+                    height: size * 0.25,
+                    child: CachedNetworkImage(
+                      imageUrl: track!.artworkUrl!,
+                      fit: BoxFit.cover,
+                      errorWidget: (ctx, url, err) => const Icon(Icons.music_note, size: 16),
+                    ),
+                  ),
+                ),
+              ),
           ],
+        );
+
+        return Center(
+          child: SizedBox(
+            width: size,
+            height: size,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Listener(
+                  behavior: HitTestBehavior.opaque,
+                  onPointerDown: _down,
+                  onPointerMove: _move,
+                  onPointerUp: _up,
+                  onPointerCancel: _up,
+                  // Claim the touch at once so the deck grid doesn't scroll.
+                  child: _enabled
+                      ? RawGestureDetector(
+                          gestures: {
+                            EagerGestureRecognizer: GestureRecognizerFactoryWithHandlers<EagerGestureRecognizer>(
+                              EagerGestureRecognizer.new,
+                              (_) {},
+                            ),
+                          },
+                          child: record,
+                        )
+                      : record,
+                ),
+                Positioned(
+                  right: -6,
+                  top: -6,
+                  child: _SlipToggle(
+                    on: widget.config.slip,
+                    onTap: widget.config.track == null ? null : widget.cubit.toggleSlip,
+                  ),
+                ),
+              ],
+            ),
+          ),
         );
       },
     );
   }
 }
 
-/// Spin the vinyl with a finger like a real DJ: clockwise seeks forward,
-/// counter-clockwise back (one revolution = 1.8 s, 33⅓ RPM).
-class _JogWheel extends StatefulWidget {
-  final double size;
-  final bool enabled;
-  final DeckCubit cubit;
-  final Widget child;
+class _SlipToggle extends StatelessWidget {
+  final bool on;
+  final VoidCallback? onTap;
 
-  const _JogWheel({
-    required this.size,
-    required this.enabled,
-    required this.cubit,
-    required this.child,
-  });
-
-  @override
-  State<_JogWheel> createState() => _JogWheelState();
-}
-
-class _JogWheelState extends State<_JogWheel> {
-  double? _lastAngle;
-
-  double _angleOf(Offset local) {
-    final center = Offset(widget.size / 2, widget.size / 2);
-    final v = local - center;
-    return math.atan2(v.dy, v.dx);
-  }
+  const _SlipToggle({required this.on, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onPanStart: widget.enabled
-          ? (d) {
-              _lastAngle = _angleOf(d.localPosition);
-              widget.cubit.jogStart();
-            }
-          : null,
-      onPanUpdate: widget.enabled
-          ? (d) {
-              final last = _lastAngle;
-              if (last == null) return;
-              final angle = _angleOf(d.localPosition);
-              var delta = angle - last;
-              // Unwrap the ±π discontinuity so crossing it doesn't jump a turn.
-              if (delta > math.pi) delta -= 2 * math.pi;
-              if (delta < -math.pi) delta += 2 * math.pi;
-              _lastAngle = angle;
-              widget.cubit.jogBy(delta);
-            }
-          : null,
-      onPanEnd: widget.enabled
-          ? (_) {
-              _lastAngle = null;
-              widget.cubit.jogEnd();
-            }
-          : null,
-      onPanCancel: widget.enabled
-          ? () {
-              _lastAngle = null;
-              widget.cubit.jogEnd();
-            }
-          : null,
-      child: widget.child,
+    return Tooltip(
+      message: 'Slip: po scratchi skladba pokračuje, jako by nebyl',
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+          decoration: BoxDecoration(
+            color: on ? kNeonPurple.withAlpha(60) : Colors.black54,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: on ? kNeonPurple : Colors.white24),
+          ),
+          child: Text(
+            'SLIP',
+            style: TextStyle(
+              fontSize: 8,
+              fontWeight: FontWeight.bold,
+              color: on ? kNeonPurple : Colors.white38,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -407,6 +496,8 @@ class _Controls extends StatelessWidget {
               const SizedBox(width: 4),
               GestureDetector(
                 onTap: canPlay ? () => cubit.togglePlayPause() : null,
+                // Long press while playing: cut the motor, the record coasts.
+                onLongPress: canPlay && config.isPlaying ? () => cubit.brake() : null,
                 child: Container(
                   width: 40,
                   height: 40,
@@ -455,6 +546,8 @@ class _Controls extends StatelessWidget {
             min: 0.7,
             max: 1.3,
             onChanged: cubit.setSpeed,
+            leading: _NudgeButton(icon: Icons.remove, onHold: canPlay ? (on) => cubit.nudge(on ? -1 : 0) : null),
+            trailing: _NudgeButton(icon: Icons.add, onHold: canPlay ? (on) => cubit.nudge(on ? 1 : 0) : null),
           ),
           _SliderRow(
             icon: Icons.volume_up,
@@ -605,6 +698,29 @@ class _EqKillRow extends StatelessWidget {
   }
 }
 
+/// Pitch bend: holding it speeds the deck up or slows it down a few percent.
+class _NudgeButton extends StatelessWidget {
+  final IconData icon;
+  final ValueChanged<bool>? onHold;
+
+  const _NudgeButton({required this.icon, required this.onHold});
+
+  @override
+  Widget build(BuildContext context) {
+    final hold = onHold;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: hold == null ? null : (_) => hold(true),
+      onTapUp: hold == null ? null : (_) => hold(false),
+      onTapCancel: hold == null ? null : () => hold(false),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+        child: Icon(icon, size: 14, color: hold == null ? Colors.white12 : Colors.white54),
+      ),
+    );
+  }
+}
+
 class _SliderRow extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -612,6 +728,8 @@ class _SliderRow extends StatelessWidget {
   final double min;
   final double max;
   final ValueChanged<double> onChanged;
+  final Widget? leading;
+  final Widget? trailing;
 
   const _SliderRow({
     required this.icon,
@@ -620,6 +738,8 @@ class _SliderRow extends StatelessWidget {
     required this.min,
     required this.max,
     required this.onChanged,
+    this.leading,
+    this.trailing,
   });
 
   @override
@@ -627,6 +747,7 @@ class _SliderRow extends StatelessWidget {
     return Row(
       children: [
         Icon(icon, size: 14, color: Colors.white54),
+        ?leading,
         Expanded(
           child: Slider(
             value: value.clamp(min, max),
@@ -635,6 +756,7 @@ class _SliderRow extends StatelessWidget {
             onChanged: onChanged,
           ),
         ),
+        ?trailing,
         SizedBox(
           width: 36,
           child: Text(

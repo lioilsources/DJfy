@@ -29,6 +29,9 @@ class DeckConfig {
   final double fxY;
   final PartyDeckRole? partyRole;
 
+  /// Slip mode: after a scratch the track carries on where it would have been.
+  final bool slip;
+
   const DeckConfig({
     required this.id,
     this.track,
@@ -48,6 +51,7 @@ class DeckConfig {
     this.fxX = 0.5,
     this.fxY = 0.5,
     this.partyRole,
+    this.slip = false,
   });
 
   DeckConfig copyWith({
@@ -65,6 +69,7 @@ class DeckConfig {
     double? fxY,
     PartyDeckRole? partyRole,
     bool clearPartyRole = false,
+    bool? slip,
   }) {
     return DeckConfig(
       id: id,
@@ -81,6 +86,7 @@ class DeckConfig {
       fxX: fxX ?? this.fxX,
       fxY: fxY ?? this.fxY,
       partyRole: clearPartyRole ? null : (partyRole ?? this.partyRole),
+      slip: slip ?? this.slip,
     );
   }
 }

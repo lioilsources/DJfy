@@ -77,6 +77,18 @@ class FakeAudioEngine extends Fake implements AudioEngine {
   Future<void> setCrossfadeGain(int deckId, double gain) async => gains[deckId] = gain;
   @override
   Future<void> setSpeed(int deckId, double speed) async {}
+
+  /// Every rate the platter sent, per deck.
+  final rates = <int, List<double>>{};
+  final seeks = <int, List<Duration>>{};
+
+  @override
+  Future<void> setRate(int deckId, double rate) async => rates.putIfAbsent(deckId, () => []).add(rate);
+  @override
+  Future<void> seekTo(int deckId, Duration position) async {
+    seeks.putIfAbsent(deckId, () => []).add(position);
+    seek(deckId, position);
+  }
   @override
   Duration positionSync(int deckId) => positions[deckId] ?? Duration.zero;
   @override

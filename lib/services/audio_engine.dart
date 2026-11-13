@@ -99,6 +99,14 @@ class AudioEngine {
   final Map<int, double> _baseVolume = {};
   final Map<int, double> _xfGain = {};
 
+  // ── Platter rate: a held record is muted, not paused ───────────────────────
+  final Map<int, double> _scratchGain = {};
+  final Map<int, double> _sentSpeed = {};
+
+  /// Slowest and fastest speed the players take; neither plays backwards.
+  static const minRate = 0.05;
+  static const maxRate = 4.0;
+
   // ── Init ────────────────────────────────────────────────────────────────────
   static Future<void> initSoLoud() async {
     await soloud.SoLoud.instance.init();
@@ -239,6 +247,29 @@ class AudioEngine {
   }
 
   Future<void> setSpeed(int deckId, double speed) async {
+    _sentSpeed[deckId] = speed;
+    final dsp = _dsp[deckId];
+    if (dsp != null) {
+      soloud.SoLoud.instance.setRelativePlaySpeed(dsp.handle, speed);
+    } else {
+      await playerFor(deckId).setSpeed(speed);
+    }
+  }
+
+  /// Follows the platter: [rate] is signed, 1 = normal. Neither engine plays
+  /// backwards or at 0, so below [minRate] the deck is muted (it keeps
+  /// reporting "playing", the way a held record still turns under the motor)
+  /// and the caller seeks to move it back.
+  Future<void> setRate(int deckId, double rate) async {
+    final still = rate.abs() < minRate;
+    final gain = still ? 0.0 : 1.0;
+    if ((_scratchGain[deckId] ?? 1) != gain) {
+      _scratchGain[deckId] = gain;
+      await _applyVolume(deckId);
+    }
+    final speed = rate.abs().clamp(minRate, maxRate);
+    if (speed == _sentSpeed[deckId]) return;
+    _sentSpeed[deckId] = speed;
     final dsp = _dsp[deckId];
     if (dsp != null) {
       soloud.SoLoud.instance.setRelativePlaySpeed(dsp.handle, speed);
@@ -260,7 +291,7 @@ class AudioEngine {
   }
 
   double _effectiveVolume(int deckId) =>
-      (_baseVolume[deckId] ?? 0.8) * (_xfGain[deckId] ?? 1.0);
+      (_baseVolume[deckId] ?? 0.8) * (_xfGain[deckId] ?? 1.0) * (_scratchGain[deckId] ?? 1.0);
 
   Future<void> _applyVolume(int deckId) async {
     final volume = _effectiveVolume(deckId);
@@ -515,6 +546,7 @@ class AudioEngine {
   // ── Dispose ────────────────────────────────────────────────────────────────
 
   void _disposeDsp(int deckId) {
+    _sentSpeed.remove(deckId);
     _timers.remove(deckId)?.cancel();
     final dsp = _dsp.remove(deckId);
     if (dsp != null) {

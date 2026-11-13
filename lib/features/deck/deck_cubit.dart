@@ -7,6 +7,7 @@ import 'package:get_it/get_it.dart';
 import 'package:just_audio/just_audio.dart' show ProcessingState;
 
 import '../../core/beat_clock.dart';
+import '../../core/platter.dart';
 import '../../models/deck_config.dart';
 import '../../models/fx.dart';
 import '../../models/track.dart';
@@ -45,12 +46,24 @@ class DeckCubit extends Cubit<DeckState> {
   // Throttle continuous FX updates to ~one per frame.
   Stopwatch? _fxThrottle;
 
-  // Jog wheel: accumulated target position while the finger spins the deck.
-  Duration? _jogPos;
-  Stopwatch? _jogThrottle;
+  // Platter: the record under the finger. Ticks only while something moves.
+  final Platter _platter = Platter();
+  Timer? _platterTimer;
+  final Stopwatch _platterClock = Stopwatch();
+  int _lastTickUs = 0;
+  double? _sentRate;
+  bool _braking = false;
 
-  /// One full revolution of the jog wheel = 1.8 s of track (33⅓ RPM vinyl).
-  static const jogSecondsPerRevolution = 1.8;
+  /// Track position under the finger while the record is touched.
+  Duration? _touchTarget;
+  Duration _slipFrom = Duration.zero;
+  final Stopwatch _slipClock = Stopwatch();
+  bool _playingAtTouch = false;
+  Stopwatch? _seekThrottle;
+  Stopwatch? _emitThrottle;
+
+  /// Audio further than this from the finger is pulled back with a seek.
+  static const _maxDrift = Duration(milliseconds: 60);
 
   DeckCubit(this.deckId, this._engine, {SoundCloudService? soundCloud})
       : _sc = soundCloud,
@@ -80,6 +93,11 @@ class DeckCubit extends Cubit<DeckState> {
       _beatClock
         ..playing = playing
         ..anchor(_engine.positionSync(deckId));
+      // Play/pause from outside (track end, party, another control): keep the
+      // motor in step, except while a finger holds the record.
+      if (_platter.mode == PlatterMode.motor && !_braking && _platter.motorOn != playing) {
+        _platter.setMotor(playing);
+      }
       final cfg = state.config.copyWith(isPlaying: playing);
       if (state is DeckReady) emit(DeckReady(cfg));
     });
@@ -98,6 +116,7 @@ class DeckCubit extends Cubit<DeckState> {
     }
     final gen = ++_loadGen;
     _endFxGesture();
+    _resetPlatter();
     final loadingConfig = state.config.copyWith(
       track: track,
       isPlaying: false,
@@ -156,20 +175,30 @@ class DeckCubit extends Cubit<DeckState> {
     }
   }
 
-  Future<void> play() => _engine.play(deckId);
+  Future<void> play() async {
+    _braking = false;
+    _platter.setMotor(true);
+    _sendRate(_platter.rate, force: true);
+    await _engine.play(deckId);
+  }
 
-  Future<void> pause() => _engine.pause(deckId);
+  Future<void> pause() async {
+    _braking = false;
+    _platter.setMotor(false);
+    await _engine.pause(deckId);
+  }
 
   /// Stops the deck and empties it, cancelling a load in progress.
   Future<void> eject() async {
     final gen = ++_loadGen;
     _atEnd = false;
+    _resetPlatter();
     await _engine.stop(deckId);
     if (gen != _loadGen || isClosed) return;
     _cancelStreams();
     _subscribeStreams();
     final c = state.config;
-    emit(DeckIdle(DeckConfig(id: deckId, volume: c.volume, partyRole: c.partyRole)));
+    emit(DeckIdle(DeckConfig(id: deckId, volume: c.volume, partyRole: c.partyRole, slip: c.slip)));
   }
 
   /// Party takeover: changes the deck's role without touching its playback.
@@ -186,9 +215,9 @@ class DeckCubit extends Cubit<DeckState> {
   Future<void> togglePlayPause() async {
     if (state is! DeckReady) return;
     if (state.config.isPlaying) {
-      await _engine.pause(deckId);
+      await pause();
     } else {
-      await _engine.play(deckId);
+      await play();
     }
   }
 
@@ -198,11 +227,12 @@ class DeckCubit extends Cubit<DeckState> {
   }
 
   Future<void> setSpeed(double speed) async {
-    await _engine.setSpeed(deckId, speed);
+    _platter.speed = speed;
+    if (_platter.mode == PlatterMode.motor && !_braking) {
+      _platter.setMotor(_platter.motorOn);
+      _sendRate(_platter.motorOn ? _platter.rate : speed);
+    }
     if (isClosed) return;
-    _beatClock
-      ..anchor(_engine.positionSync(deckId))
-      ..speed = speed;
     emit(DeckReady(state.config.copyWith(speed: speed)));
   }
 
@@ -348,43 +378,179 @@ class DeckCubit extends Cubit<DeckState> {
     _beatClock.anchor(target);
   }
 
-  // ── Jog wheel (vinyl scratching) ───────────────────────────────────────────
+  // ── Platter (vinyl scratching) ─────────────────────────────────────────────
 
-  void jogStart() {
-    if (state is! DeckReady) return;
-    _jogPos = _engine.positionSync(deckId);
-    _jogThrottle = Stopwatch()..start();
+  /// The NEXT deck of a party only waits for its track; nothing to scratch.
+  bool get canScratch => state is DeckReady && state.config.partyRole != PartyDeckRole.next;
+
+  /// Where the record is: under the finger, or extrapolated between polls.
+  Duration get displayPosition => _touchTarget ?? _beatClock.estimatedPosition;
+
+  /// Record angle for the platter painter, consistent with scratching.
+  double get platterAngle =>
+      displayPosition.inMicroseconds / 1e6 / Platter.secondsPerRevolution * 2 * math.pi;
+
+  /// Nothing left to animate: a ticker can stop once the deck isn't playing.
+  bool get platterIdle => _platterTimer == null;
+
+  /// A finger lands on the record: it stops right away (vinyl mode).
+  void platterTouch() {
+    if (!canScratch) return;
+    _braking = false;
+    final pos = _engine.positionSync(deckId);
+    _touchTarget = pos;
+    _slipFrom = pos;
+    _slipClock
+      ..reset()
+      ..start();
+    _playingAtTouch = state.config.isPlaying;
+    _platter.touch();
+    _sendRate(0);
+    // A paused record still sounds under the finger; play it muted.
+    if (!_playingAtTouch) unawaited(_engine.play(deckId));
+    _seekThrottle = Stopwatch()..start();
+    _emitThrottle = Stopwatch()..start();
+    _runPlatter();
   }
 
-  /// [deltaRadians] of wheel rotation since the last call; clockwise seeks
-  /// forward, counter-clockwise back.
-  void jogBy(double deltaRadians) {
-    final pos = _jogPos;
-    if (pos == null || state is! DeckReady) return;
-
-    final deltaUs =
-        deltaRadians / (2 * math.pi) * jogSecondsPerRevolution * 1e6;
-    var target = pos + Duration(microseconds: deltaUs.round());
-    if (target < Duration.zero) target = Duration.zero;
-    final dur = state.config.duration;
-    if (dur > Duration.zero && target > dur) target = dur;
-    _jogPos = target;
-
-    // Optimistic position so the vinyl follows the finger between 200 ms polls.
-    emit(DeckReady(state.config.copyWith(position: target)));
-
-    if (_jogThrottle != null && _jogThrottle!.elapsedMilliseconds < 33) return;
-    _jogThrottle?.reset();
-    _engine.seekTo(deckId, target);
+  /// The finger turned the record by [radians] over [seconds].
+  void platterDrag(double radians, double seconds) {
+    final target = _touchTarget;
+    if (target == null || state is! DeckReady) return;
+    _platter.drag(radians, seconds);
+    _touchTarget = _clampPosition(target + Platter.trackTime(radians));
+    _followFinger();
+    if (_emitThrottle!.elapsedMilliseconds >= 33) {
+      _emitThrottle!.reset();
+      emit(DeckReady(state.config.copyWith(position: _touchTarget)));
+    }
   }
 
-  void jogEnd() {
-    final target = _jogPos;
-    _jogPos = null;
-    _jogThrottle = null;
+  void platterRelease() {
+    final target = _touchTarget;
     if (target == null) return;
-    _engine.seekTo(deckId, target);
+    _touchTarget = null;
+    _seekThrottle = null;
+    _emitThrottle = null;
+    _platter.release();
+    if (!_playingAtTouch) {
+      _platter.setMotor(false);
+      unawaited(_engine.pause(deckId));
+      _seek(target);
+    } else if (state.config.slip) {
+      // Slip: the track went on underneath; carry on where it would be.
+      final elapsed = _slipClock.elapsedMicroseconds * _platter.speed;
+      _seek(_clampPosition(_slipFrom + Duration(microseconds: elapsed.round())));
+      _platter.setMotor(true);
+      _sendRate(_platter.rate);
+    } else {
+      _seek(target);
+    }
+    _runPlatter();
+  }
+
+  /// Coasts to a stop over [seconds], like cutting the motor of a turntable.
+  void brake([double seconds = 1]) {
+    if (state is! DeckReady || !state.config.isPlaying || _touchTarget != null) return;
+    _braking = true;
+    _platter.brake(seconds);
+    _runPlatter();
+  }
+
+  /// Pitch bend while a nudge button is held: −1, 0 or +1.
+  void nudge(int direction) {
+    _platter.nudge = direction.sign;
+    if (_platter.motorOn) _runPlatter();
+  }
+
+  void toggleSlip() {
+    if (state is! DeckReady) return;
+    emit(DeckReady(state.config.copyWith(slip: !state.config.slip)));
+  }
+
+  void _runPlatter() {
+    if (_platterTimer != null) return;
+    _platterClock
+      ..reset()
+      ..start();
+    _lastTickUs = 0;
+    _platterTimer = Timer.periodic(const Duration(milliseconds: 16), (_) => _tickPlatter());
+  }
+
+  void _tickPlatter() {
+    final now = _platterClock.elapsedMicroseconds;
+    _platter.tick((now - _lastTickUs) / 1e6);
+    _lastTickUs = now;
+    if (_touchTarget != null) {
+      _followFinger();
+      return;
+    }
+    if (_braking && !_platter.motorOn) {
+      _braking = false;
+      _sendRate(0);
+      unawaited(pause());
+    } else {
+      _sendRate(_platter.rate);
+    }
+    if (_platter.settled) {
+      _sendRate(_platter.rate, force: true); // small last steps fall under the threshold
+      _stopPlatter();
+    }
+  }
+
+  /// Keeps the audio on the finger: the rate follows the finger's speed, and
+  /// a seek pulls it back when it drifts (or plays forwards while the finger
+  /// goes backwards, which neither engine can do).
+  void _followFinger() {
+    final target = _touchTarget!;
+    final rate = _platter.rate;
+    _sendRate(rate);
+    final drift = (_engine.positionSync(deckId) - target).abs();
+    final backwards = rate <= -AudioEngine.minRate;
+    if (drift > _maxDrift || (backwards && drift > const Duration(milliseconds: 10))) {
+      if (_seekThrottle == null || _seekThrottle!.elapsedMilliseconds >= 33) {
+        _seekThrottle?.reset();
+        _seek(target);
+      }
+    }
+  }
+
+  void _sendRate(double rate, {bool force = false}) {
+    final sent = _sentRate;
+    if (!force && sent != null && (rate - sent).abs() < 0.002) return;
+    _sentRate = rate;
+    unawaited(_engine.setRate(deckId, rate));
+    _beatClock
+      ..anchor(_engine.positionSync(deckId))
+      ..speed = math.max(rate.abs(), AudioEngine.minRate);
+  }
+
+  void _seek(Duration target) {
+    unawaited(_engine.seekTo(deckId, target));
     _beatClock.anchor(target);
+  }
+
+  Duration _clampPosition(Duration pos) {
+    if (pos < Duration.zero) return Duration.zero;
+    final dur = state.config.duration;
+    return dur > Duration.zero && pos > dur ? dur : pos;
+  }
+
+  void _stopPlatter() {
+    _platterTimer?.cancel();
+    _platterTimer = null;
+    _platterClock.stop();
+  }
+
+  void _resetPlatter() {
+    _stopPlatter();
+    _touchTarget = null;
+    _braking = false;
+    _sentRate = null;
+    _platter
+      ..release()
+      ..nudge = 0
+      ..setMotor(false);
   }
 
   // ── Beatskip ───────────────────────────────────────────────────────────────
@@ -410,6 +576,7 @@ class DeckCubit extends Cubit<DeckState> {
 
   @override
   Future<void> close() {
+    _stopPlatter();
     _rollTimer?.cancel();
     _rollStopwatch = null;
     _cancelStreams();
