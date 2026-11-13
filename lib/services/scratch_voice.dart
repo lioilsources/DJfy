@@ -22,6 +22,10 @@ class ScratchVoice {
   static const minAhead = Duration(milliseconds: 40);
   static const maxAhead = Duration(milliseconds: 120);
 
+  /// Lead while the app is in the background (locked phone at a party):
+  /// timers there can stall far longer than a frame, and nobody scratches.
+  static const backgroundAhead = Duration(milliseconds: 1500);
+
   final DecodedPcm pcm;
   final ScratchRenderer renderer;
   final AudioSource source;
@@ -31,7 +35,11 @@ class ScratchVoice {
 
   Timer? _timer;
   int _pushedFrames = 0;
-  Duration _ahead = minAhead;
+  Duration _foregroundAhead = minAhead;
+  bool _background = false;
+  Duration get _ahead => _background ? backgroundAhead : _foregroundAhead;
+
+  set background(bool on) => _background = on;
   int underruns = 0;
   bool _endedSent = false;
   bool _disposed = false;
@@ -48,6 +56,7 @@ class ScratchVoice {
   static Future<ScratchVoice> start(
     DecodedPcm pcm, {
     required double volume,
+    bool background = false,
     required void Function(AudioSource source) prepareFilters,
     required void Function() onEnded,
   }) async {
@@ -63,7 +72,7 @@ class ScratchVoice {
         if (isBuffering) voice._underrun();
       },
     );
-    voice = ScratchVoice._(pcm, source, onEnded);
+    voice = ScratchVoice._(pcm, source, onEnded).._background = background;
     prepareFilters(source);
     voice.handle = await SoLoud.instance.play(source, volume: volume);
     // Data has to arrive after play(): only an add wakes a buffering handle.
@@ -146,7 +155,8 @@ class ScratchVoice {
     // Every stream starts out buffering; that one isn't a stall.
     if (_consumedFrames() <= 0) return;
     underruns++;
-    _ahead = Duration(microseconds: math.min(maxAhead.inMicroseconds, _ahead.inMicroseconds + 10000));
+    _foregroundAhead =
+        Duration(microseconds: math.min(maxAhead.inMicroseconds, _foregroundAhead.inMicroseconds + 10000));
     debugPrint('[ScratchVoice] underrun #$underruns, lead now ${_ahead.inMilliseconds} ms');
     scheduleMicrotask(() {
       for (var i = 0; i < 8 && !_disposed; i++) {

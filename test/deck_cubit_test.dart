@@ -7,6 +7,7 @@ import 'package:dj_deckify/core/track_analysis.dart';
 import 'package:dj_deckify/features/deck/deck_cubit.dart';
 import 'package:dj_deckify/features/deck/deck_state.dart';
 import 'package:dj_deckify/models/deck_config.dart';
+import 'package:dj_deckify/models/fx.dart';
 import 'package:dj_deckify/models/track.dart';
 import 'package:dj_deckify/services/soundcloud_service.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -98,6 +99,32 @@ void main() {
     expect(deck.state.isPlaying, isTrue);
   });
 
+  test('a party (streaming) load offers the progressive MP3 for PCM', () async {
+    when(() => sc.streamsFor(any())).thenAnswer((_) async => (progressive: 'https://cdn.test/1.mp3', fallback: 'https://cdn.test/1.m3u8'));
+    await deck.loadTrack(t1, streaming: true);
+    expect(engine.progressive[1], (url: 'https://cdn.test/1.mp3', streaming: true));
+    expect(engine.loaded[1], 'https://cdn.test/1.m3u8');
+  });
+
+  test('roll on a PCM deck loops in the voice and lands on the grid', () async {
+    const withBpm = Track(id: 'sc:3', title: 'Three', artist: 'C', scId: 3, bpm: 120);
+    engine.reversible.add(1);
+    await deck.loadTrack(withBpm, streaming: true);
+    engine.seek(1, const Duration(milliseconds: 10100));
+    await deck.play();
+    deck.selectFx(FxType.roll);
+    deck.fxStart(0.3, 0.5); // 1/4 beat
+    expect(engine.loops[1], (start: const Duration(seconds: 10), length: const Duration(milliseconds: 125)));
+    expect(engine.seeks[1] ?? [], isEmpty); // no seek clicks
+    await Future<void>.delayed(const Duration(milliseconds: 20)); // updates are throttled per frame
+    deck.fxUpdate(0.9, 0.5); // 1/16 beat
+    expect(engine.loops[1]!.length, const Duration(microseconds: 31250));
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    deck.fxEnd();
+    expect(engine.loops[1], isNull);
+    expect(engine.seeks[1]!.last, greaterThanOrEqualTo(const Duration(milliseconds: 10300)));
+  });
+
   test('a PCM deck gets its waveform and a detected beat grid', () async {
     const withBpm = Track(id: 'sc:3', title: 'Three', artist: 'C', scId: 3, bpm: 120);
     final onsets = Float32List(3000);
@@ -156,7 +183,8 @@ void main() {
         deck.platterDrag(-math.pi / 4, 0.1);
         await ms(40);
       }
-      expect(engine.rates[1]!.last, lessThan(0));
+      // A finger that pauses > 50 ms stops the record, so check it went backwards at all.
+      expect(engine.rates[1]!.any((r) => r < 0), isTrue);
       expect(engine.seeks[1], isNotEmpty);
       expect(engine.seeks[1]!.last, lessThan(const Duration(seconds: 10)));
       deck.platterRelease();

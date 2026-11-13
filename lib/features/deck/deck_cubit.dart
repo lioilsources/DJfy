@@ -128,20 +128,20 @@ class DeckCubit extends Cubit<DeckState> {
     debugPrint('[Deck $deckId] loading: ${track.title}');
 
     try {
-      // A DSP-enabled party mode only has to pass streams.progressive below.
       final String url;
       String? progressiveUrl;
       if (streaming) {
         final streams = await _soundCloud.streamsFor(track.scId ?? (throw StateError('Track has no SoundCloud id')));
         if (gen != _loadGen || isClosed) return;
         url = streams.fallback ?? (throw StateError('No stream for "${track.title}"'));
+        progressiveUrl = streams.progressive; // PCM if it's ready in time: scratch + FX at the party
       } else {
         url = track.soundcloudStreamUrl!;
         progressiveUrl = await _resolveProgressive(track);
         if (gen != _loadGen || isClosed) return;
       }
 
-      final hasDsp = await _engine.loadTrack(deckId, url, progressiveUrl: progressiveUrl);
+      final hasDsp = await _engine.loadTrack(deckId, url, progressiveUrl: progressiveUrl, streaming: streaming);
       if (gen != _loadGen || isClosed) return;
       // Re-subscribe streams — SoLoud decks use different stream sources
       _cancelStreams();
@@ -343,7 +343,7 @@ class DeckCubit extends Cubit<DeckState> {
 
   void _endFxGesture() {
     final type = state.config.selectedFx;
-    if (type == FxType.roll && _rollTimer != null) {
+    if (type == FxType.roll && _rollStopwatch != null) {
       _stopRoll();
     } else if (type == FxType.beatskip) {
       _beatskipBucket = null;
@@ -360,15 +360,23 @@ class DeckCubit extends Cubit<DeckState> {
         _beatClock.quantizeToBeat(_engine.positionSync(deckId));
     if (_rollAnchor < Duration.zero) _rollAnchor = Duration.zero;
     _rollStopwatch = Stopwatch()..start();
-    _engine.seekTo(deckId, _rollAnchor);
+    if (!_engine.canReverse(deckId)) _engine.seekTo(deckId, _rollAnchor);
     _restartRollTimer();
   }
+
+  Duration get _rollSlice =>
+      Duration(microseconds: (_beatClock.beatDuration.inMicroseconds * _rollBeats).round());
 
   /// Self-correcting scheduler: each fire is timed against the roll's own
   /// stopwatch (absolute wall-time targets), so Timer jitter never
   /// accumulates the way it would with Timer.periodic.
   void _restartRollTimer() {
     _rollTimer?.cancel();
+    if (_engine.canReverse(deckId)) {
+      // The voice loops sample-accurately: no timer jitter, no seek clicks.
+      _engine.loop(deckId, _rollAnchor, _rollSlice);
+      return;
+    }
     final sliceWallUs =
         (_beatClock.wallBeatDuration.inMicroseconds * _rollBeats).round();
     if (sliceWallUs <= 0) return;
@@ -391,6 +399,7 @@ class DeckCubit extends Cubit<DeckState> {
   void _stopRoll() {
     _rollTimer?.cancel();
     _rollTimer = null;
+    if (_engine.canReverse(deckId)) _engine.endLoop(deckId);
     final sw = _rollStopwatch;
     _rollStopwatch = null;
     if (sw == null) return;

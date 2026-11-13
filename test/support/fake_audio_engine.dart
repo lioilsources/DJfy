@@ -40,9 +40,10 @@ class FakeAudioEngine extends Fake implements AudioEngine {
   Stream<PlayerState> playerStateStream(int deckId) => _stateFor(deckId).stream;
 
   @override
-  Future<bool> loadTrack(int deckId, String hlsUrl, {String? progressiveUrl}) async {
+  Future<bool> loadTrack(int deckId, String hlsUrl, {String? progressiveUrl, bool streaming = false}) async {
     final load = FakeLoad(deckId, hlsUrl);
     loads.add(load);
+    progressive[deckId] = (url: progressiveUrl, streaming: streaming);
     _latest[deckId] = load;
     playing.remove(deckId);
     if (!holdLoads) load.done.complete();
@@ -52,8 +53,11 @@ class FakeAudioEngine extends Fake implements AudioEngine {
       loaded[deckId] = hlsUrl;
       positions[deckId] = Duration.zero;
     }
-    return false;
+    return reversible.contains(deckId); // a PCM deck has DSP
   }
+
+  /// What each deck's last load asked for besides the stream.
+  final progressive = <int, ({String? url, bool streaming})>{};
 
   @override
   Future<void> play(int deckId) async {
@@ -92,6 +96,12 @@ class FakeAudioEngine extends Fake implements AudioEngine {
 
   @override
   bool canReverse(int deckId) => reversible.contains(deckId);
+
+  final loops = <int, ({Duration start, Duration length})?>{};
+  @override
+  void loop(int deckId, Duration start, Duration length) => loops[deckId] = (start: start, length: length);
+  @override
+  void endLoop(int deckId) => loops[deckId] = null;
 
   final analyses = <int, TrackAnalysis>{};
   @override

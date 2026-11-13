@@ -5,7 +5,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:djfy_decoder/djfy_decoder.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_soloud/flutter_soloud.dart' as soloud;
 import 'package:just_audio/just_audio.dart';
 
@@ -133,6 +133,7 @@ class AudioEngine {
 
   static Future<void> initSoLoud() async {
     await soloud.SoLoud.instance.init(bufferSize: mixerBufferFrames);
+    instance._lifecycle; // start following foreground/background
   }
 
   /// Decoded tracks take ~10 MB a minute; cap how many decks hold one.
@@ -140,7 +141,20 @@ class AudioEngine {
   static const _maxDownloadBytes = 40 << 20;
   static const _downloadTimeout = Duration(seconds: 20);
 
+  /// Party tracks start from a stream: give up on PCM after this and stream.
+  static const streamingVoiceDeadline = Duration(seconds: 8);
+
   final Map<int, int> _loadSeq = {};
+
+  bool _background = false;
+  late final AppLifecycleListener _lifecycle = AppLifecycleListener(onStateChange: (state) {
+    final background = state == AppLifecycleState.hidden || state == AppLifecycleState.paused;
+    if (background == _background) return;
+    _background = background;
+    for (final d in _dsp.values) {
+      d.voice?.background = background;
+    }
+  });
 
   // ── Load ────────────────────────────────────────────────────────────────────
 
@@ -152,10 +166,13 @@ class AudioEngine {
   ///
   /// Returns true if DSP (SoLoud) was activated, false for the just_audio
   /// fallback. Throws if the fallback can't load either.
+  /// [streaming] (party): PCM only if it's ready within
+  /// [streamingVoiceDeadline], otherwise straight to just_audio.
   Future<bool> loadTrack(
     int deckId,
     String hlsUrl, {
     String? progressiveUrl,
+    bool streaming = false,
   }) async {
     // Tear down any existing SoLoud state for this deck
     _disposeDsp(deckId);
@@ -163,9 +180,10 @@ class AudioEngine {
 
     if (progressiveUrl != null && progressiveUrl.isNotEmpty && !isHlsUrl(progressiveUrl)) {
       final voices = _dsp.values.where((d) => d.voice != null).length;
-      if (voices < maxVoices && await _loadViaVoice(deckId, progressiveUrl, seq)) return true;
+      final deadline = streaming ? streamingVoiceDeadline : _downloadTimeout;
+      if (voices < maxVoices && await _loadViaVoice(deckId, progressiveUrl, seq, deadline)) return true;
       if (_loadSeq[deckId] != seq) throw LoadSuperseded();
-      if (await _loadViaSoLoud(deckId, progressiveUrl)) return true;
+      if (!streaming && await _loadViaSoLoud(deckId, progressiveUrl)) return true;
     }
     await _loadViaJustAudio(deckId, hlsUrl);
     return false;
@@ -190,12 +208,12 @@ class AudioEngine {
     await player.setVolume(_effectiveVolume(deckId));
   }
 
-  Future<bool> _loadViaVoice(int deckId, String url, int seq) async {
+  Future<bool> _loadViaVoice(int deckId, String url, int seq, Duration deadline) async {
     try {
       final sw = Stopwatch()..start();
-      final bytes = await _download(url).timeout(_downloadTimeout);
+      final bytes = await _download(url).timeout(deadline);
       final downloaded = sw.elapsedMilliseconds;
-      final pcm = await decodeMp3(bytes);
+      final pcm = await decodeMp3(bytes).timeout(deadline - sw.elapsed);
       if (_loadSeq[deckId] != seq) throw LoadSuperseded();
       if (pcm == null) {
         debugPrint('[AudioEngine] deck $deckId: not a decodable MP3');
@@ -204,6 +222,7 @@ class AudioEngine {
       final voice = await ScratchVoice.start(
         pcm,
         volume: _effectiveVolume(deckId),
+        background: _background,
         prepareFilters: _activateFilters,
         onEnded: () => _emitState(deckId, playing: false, completed: true),
       );
@@ -472,6 +491,10 @@ class AudioEngine {
   /// Only for [canReverse] decks.
   void follow(int deckId, Duration? at, double rate) => _dsp[deckId]?.voice?.follow(at, rate);
 
+  /// Sample-accurate loop of [length] from [start] (roll, loop); [canReverse] decks only.
+  void loop(int deckId, Duration start, Duration length) => _dsp[deckId]?.voice?.loop(start, length);
+  void endLoop(int deckId) => _dsp[deckId]?.voice?.endLoop();
+
   // ── FX (Pacemaker-style pad) ───────────────────────────────────────────────
 
   /// Applies a continuous FX with pad coordinates x, y ∈ [0, 1].
@@ -522,6 +545,7 @@ class AudioEngine {
               FxParamMapper.hiLoResonance(y);
           apply(f.biquadFilter.wet(soundHandle: h), 1);
         case FxType.echo:
+          _echoGen[deckId] = (_echoGen[deckId] ?? 0) + 1; // cancels a tail still ringing
           final beat = beatDuration ?? const Duration(milliseconds: 500);
           final delay = (FxParamMapper.echoBeats(x) *
                   beat.inMicroseconds /
@@ -564,9 +588,7 @@ class AudioEngine {
               .fadeFilterParameter(to: 0, time: fade);
           f.biquadFilter.frequency(soundHandle: h).value = 16000;
         case FxType.echo:
-          f.echoFilter
-              .wet(soundHandle: h)
-              .fadeFilterParameter(to: 0, time: fade);
+          _echoTail(deckId, dsp);
         case FxType.reverb:
           f.freeverbFilter
               .wet(soundHandle: h)
@@ -582,6 +604,23 @@ class AudioEngine {
     } catch (e) {
       debugPrint('[AudioEngine] clearFx($type) failed: $e');
     }
+  }
+
+  final Map<int, int> _echoGen = {};
+
+  /// Lets the echoes ring out (Pacemaker) instead of cutting them: the
+  /// feedback fades over at least two repeats, then the effect closes.
+  void _echoTail(int deckId, _DspDeck dsp) {
+    final f = dsp.source.filters.echoFilter;
+    final h = dsp.handle;
+    final gen = _echoGen[deckId] = (_echoGen[deckId] ?? 0) + 1;
+    final delay = f.delay(soundHandle: h).value;
+    final tail = Duration(milliseconds: math.max(600, (delay * 2000).round()));
+    f.decay(soundHandle: h).fadeFilterParameter(to: 0, time: tail);
+    Timer(tail, () {
+      if (_echoGen[deckId] != gen || !identical(_dsp[deckId], dsp)) return; // re-engaged or reloaded
+      f.wet(soundHandle: h).fadeFilterParameter(to: 0, time: const Duration(milliseconds: 50));
+    });
   }
 
   /// Synchronous position read (bypasses the 200 ms poll) — used to anchor
