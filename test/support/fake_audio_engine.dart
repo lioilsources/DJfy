@@ -84,6 +84,15 @@ class FakeAudioEngine extends Fake implements AudioEngine {
 
   @override
   Future<void> setRate(int deckId, double rate) async => rates.putIfAbsent(deckId, () => []).add(rate);
+
+  /// Decks that play decoded PCM (can go backwards, follow a finger).
+  final reversible = <int>{};
+  final follows = <int, List<Duration?>>{};
+
+  @override
+  bool canReverse(int deckId) => reversible.contains(deckId);
+  @override
+  void follow(int deckId, Duration? at, double rate) => follows.putIfAbsent(deckId, () => []).add(at);
   @override
   Future<void> seekTo(int deckId, Duration position) async {
     seeks.putIfAbsent(deckId, () => []).add(position);

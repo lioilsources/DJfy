@@ -201,6 +201,29 @@ void main() {
       expect(engine.rates[1]!.last, closeTo(1, 1e-3));
     });
 
+    test('a PCM deck follows the finger directly, backwards included, without seeks', () async {
+      await loaded();
+      engine.reversible.add(1);
+      deck.platterTouch();
+      expect(engine.follows[1]!.last, const Duration(seconds: 10));
+      deck.platterDrag(-math.pi, 0.2);
+      expect(engine.follows[1]!.last, const Duration(milliseconds: 9100));
+      await ms(40);
+      deck.platterRelease();
+      expect(engine.follows[1]!.last, isNull);
+      expect(engine.seeks[1] ?? [], isEmpty);
+      expect(engine.playing, {1});
+    });
+
+    test('a paused PCM deck sounds under the finger without being started', () async {
+      await loaded(playing: false);
+      engine.reversible.add(1);
+      deck.platterTouch();
+      expect(engine.playing, isEmpty);
+      deck.platterRelease();
+      expect(engine.follows[1]!.last, isNull);
+    });
+
     test('the NEXT deck of a party cannot be scratched', () async {
       await loaded();
       deck.setPartyRole(PartyDeckRole.next);

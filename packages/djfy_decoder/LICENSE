@@ -1,0 +1,5 @@
+djfy_decoder is part of DJfy.
+
+src/dr_mp3.h is by David Reid (https://github.com/mackron/dr_libs), released
+into the public domain or, alternatively, under MIT No Attribution; see the
+end of that file.

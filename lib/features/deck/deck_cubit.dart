@@ -406,8 +406,11 @@ class DeckCubit extends Cubit<DeckState> {
     _playingAtTouch = state.config.isPlaying;
     _platter.touch();
     _sendRate(0);
-    // A paused record still sounds under the finger; play it muted.
-    if (!_playingAtTouch) unawaited(_engine.play(deckId));
+    if (_engine.canReverse(deckId)) {
+      _engine.follow(deckId, pos, 0); // the voice sounds under the finger even when paused
+    } else if (!_playingAtTouch) {
+      unawaited(_engine.play(deckId)); // a paused record still sounds under the finger
+    }
     _seekThrottle = Stopwatch()..start();
     _emitThrottle = Stopwatch()..start();
     _runPlatter();
@@ -433,17 +436,21 @@ class DeckCubit extends Cubit<DeckState> {
     _seekThrottle = null;
     _emitThrottle = null;
     _platter.release();
+    final reversible = _engine.canReverse(deckId);
+    if (reversible) _engine.follow(deckId, null, 0); // it already sits under the finger
     if (!_playingAtTouch) {
       _platter.setMotor(false);
-      unawaited(_engine.pause(deckId));
-      _seek(target);
+      if (!reversible) {
+        unawaited(_engine.pause(deckId));
+        _seek(target);
+      }
     } else if (state.config.slip) {
       // Slip: the track went on underneath; carry on where it would be.
       final elapsed = _slipClock.elapsedMicroseconds * _platter.speed;
       _seek(_clampPosition(_slipFrom + Duration(microseconds: elapsed.round())));
       _platter.setMotor(true);
       _sendRate(_platter.rate);
-    } else {
+    } else if (!reversible) {
       _seek(target);
     }
     _runPlatter();
@@ -498,12 +505,17 @@ class DeckCubit extends Cubit<DeckState> {
     }
   }
 
-  /// Keeps the audio on the finger: the rate follows the finger's speed, and
-  /// a seek pulls it back when it drifts (or plays forwards while the finger
-  /// goes backwards, which neither engine can do).
+  /// Keeps the audio on the finger. A PCM deck follows it directly; on the
+  /// others the rate follows the finger's speed and a seek pulls the audio
+  /// back when it drifts (or plays forwards while the finger goes backwards,
+  /// which those players can't do).
   void _followFinger() {
     final target = _touchTarget!;
     final rate = _platter.rate;
+    if (_engine.canReverse(deckId)) {
+      _engine.follow(deckId, target, rate); // plays backwards too, no seeks
+      return;
+    }
     _sendRate(rate);
     final drift = (_engine.positionSync(deckId) - target).abs();
     final backwards = rate <= -AudioEngine.minRate;

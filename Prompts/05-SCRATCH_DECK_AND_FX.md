@@ -336,6 +336,42 @@ Pravidla jako v minulých handoffech: nespouštěj `dart format` na existující
 
 ---
 
-### Výsledky spiku (doplní Opus)
+### Výsledky spiku (2026-11-13, Opus)
 
-_(zařízení, latence, dekódování, zvolená cesta)_
+Telefony nebyly k dispozici (Pixel odpojený, iPhone 12 mini „unavailable“), měřeno
+na **macOS (Apple Silicon, profile build)**. Skripty v `tool/spike/`, na telefonu
+`flutter run -d <id> --profile -t tool/spike/buffer_stream_spike.dart`.
+
+**BufferStream + producent v hlavním isolate** (timer 4 ms, bloky 256 framů,
+„jank“ = 30 ms blokace isolate každých 400 ms):
+
+| mixér (`init(bufferSize:)`) | předstih 20 ms | 40 ms | 60 ms | 90 ms |
+|---|---|---|---|---|
+| 2048 framů = 46 ms (dnešní default) | zasekne se | zasekne se (4,4 s z 5) | OK | OK |
+| 512 framů = 11,6 ms | OK, s jankem zasekne | **OK i s jankem** | OK | OK |
+| 256 framů = 5,8 ms | OK, s jankem zasekne | OK i s jankem | OK | OK |
+
+- Podtečení **zasekne stream natrvalo**: SoLoud voice pauzuje a odpauzuje jen při
+  dalším `addAudioDataStream`. → `ScratchVoice` po podtečení hned dotlačí data a
+  zvýší předstih o 10 ms (max 120 ms). První „buffering“ po startu není podtečení.
+- Data se musí poslat **až po `play()`**, jinak voice zůstane v počátečním bufferingu.
+- Na BufferStream voice se nesmí volat `setPause` (SoLoud ho sám přepíná).
+- Filtry (echo, biquad) na BufferStream zdroji fungují stejně jako na `loadUrl`.
+- **Odhad latence dotyk→zvuk (cesta B): 40 ms předstih + 11,6 ms mixér + výstup
+  zařízení** (macOS ~5–10 ms, telefony typicky 10–40 ms). Na hranici 60 ms.
+
+**Dekódování**: `readSamplesFromMem` je nepoužitelné pro přehrávání (vrací jen levý
+kanál, čte po jednom framu – `src/waveform/waveform.cpp`). Vlastní FFI balíček
+`packages/djfy_decoder` (dr_mp3): 6 min stereo 192 kbit/s → 60 MiB s16 PCM za
+**201 ms** (RSS +83 MiB), stereo ověřeno. Na telefonu odhad 1–1,5 s.
+
+**End-to-end v `AudioEngine`** (`tool/spike/voice_spike.dart`): stažení + dekódování
+20s skladby 19–30 ms, přehrávání, couvání (−1×), držení, sledování prstu, konec
+skladby – vše funguje, bez podtečení, slyšená pozice zaostává ~30–40 ms.
+
+**Rozhodnutí**: implementována **cesta B** (Dart producent, mixér 512 framů,
+adaptivní předstih 40–120 ms). Podle pravidla uživatele (hranice 60 ms) je potřeba
+**změřit na iPhonu 12 mini a Pixelu 8a**: spustit `buffer_stream_spike.dart`
+a poslech scratch na zařízení. Když vyjde jank-safe předstih > ~40 ms nebo je
+scratch slyšitelně opožděný, přejít na **C-lite** (producent v nativním vlákně,
+`ScratchRenderer` přepsat do C v `packages/djfy_decoder/src`).
