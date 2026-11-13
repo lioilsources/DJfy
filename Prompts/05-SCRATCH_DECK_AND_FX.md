@@ -305,6 +305,18 @@ Pravidla jako v minulých handoffech: nespouštěj `dart format` na existující
 `adb -s 46201JEKB03641 install -r build/app/outputs/flutter-apk/app-release.apk`
 (Pixel 8a; `adb` je v `~/Library/Android/sdk/platform-tools/`).
 
+## Stav implementace (2026-11-13)
+
+Hotovo na větvi `feat/scratch-deck`: kroky 0–6. Odchylky od plánu:
+- PR je jeden za celou větev (po commitech), ne tři – telefon nebyl k dispozici,
+  takže mezikroky nešlo nechat vyzkoušet.
+- Brake je dlouhý stisk Play i efekt BRAKE na padu; nudge −/+ jsou vedle pitch slideru;
+  SLIP je přepínač na talíři.
+- FX pad je pod zmenšeným talířem (sloupec), ne poloprůhledný překryv.
+- FLANGER, GATE a kvantizované zapnutí efektu (5.5 „sync“) nejsou udělané.
+- Paměťový limit: 4 PCM decky (ne 2), protože dnešní záloha `loadUrl` drží PCM
+  jako float a bere víc.
+
 ## 7. Checklist na zařízení (pro uživatele)
 
 - Talíř se točí při hraní (≈ 1 otáčka za 1,8 s), stojí při pauze.
