@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'fx.dart';
 import 'track.dart';
 
@@ -32,6 +34,12 @@ class DeckConfig {
   /// Slip mode: after a scratch the track carries on where it would have been.
   final bool slip;
 
+  /// Waveform peaks (see TrackAnalysis), when the deck plays decoded PCM.
+  final Uint8List? waveform;
+
+  /// Where the beat grid starts; detected from the audio or set with TAP.
+  final Duration beatOffset;
+
   const DeckConfig({
     required this.id,
     this.track,
@@ -52,6 +60,8 @@ class DeckConfig {
     this.fxY = 0.5,
     this.partyRole,
     this.slip = false,
+    this.waveform,
+    this.beatOffset = Duration.zero,
   });
 
   DeckConfig copyWith({
@@ -70,6 +80,9 @@ class DeckConfig {
     PartyDeckRole? partyRole,
     bool clearPartyRole = false,
     bool? slip,
+    Uint8List? waveform,
+    bool clearWaveform = false,
+    Duration? beatOffset,
   }) {
     return DeckConfig(
       id: id,
@@ -87,6 +100,8 @@ class DeckConfig {
       fxY: fxY ?? this.fxY,
       partyRole: clearPartyRole ? null : (partyRole ?? this.partyRole),
       slip: slip ?? this.slip,
+      waveform: clearWaveform ? null : (waveform ?? this.waveform),
+      beatOffset: beatOffset ?? this.beatOffset,
     );
   }
 }

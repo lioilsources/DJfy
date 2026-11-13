@@ -23,6 +23,9 @@ class BeatClock {
   double speed;
   bool playing = false;
 
+  /// Where the first beat falls (track time); the grid repeats from there.
+  Duration offset = Duration.zero;
+
   Duration _anchorPos = Duration.zero;
   int _anchorWallUs = 0;
 
@@ -55,11 +58,17 @@ class BeatClock {
     return _anchorPos + Duration(microseconds: (wallUs * speed).round());
   }
 
-  /// Nearest beat-grid point to [pos] (track time, grid anchored at 0).
+  /// Nearest beat-grid point to [pos] (track time, grid anchored at [offset]).
   Duration quantizeToBeat(Duration pos) {
     final beatUs = beatDuration.inMicroseconds;
     if (beatUs == 0) return pos;
-    final beats = (pos.inMicroseconds / beatUs).round();
-    return Duration(microseconds: beats * beatUs);
+    final beats = ((pos - offset).inMicroseconds / beatUs).round();
+    return offset + Duration(microseconds: beats * beatUs);
+  }
+
+  /// Grid phase that puts a beat exactly at [pos] (the TAP button).
+  Duration phaseAt(Duration pos) {
+    final beatUs = beatDuration.inMicroseconds;
+    return Duration(microseconds: pos.inMicroseconds % beatUs);
   }
 }

@@ -13,6 +13,7 @@ import 'deck_cubit.dart';
 import 'deck_state.dart';
 import 'fx_pad.dart';
 import 'vinyl_painter.dart';
+import 'waveform_strip.dart';
 
 const _kColorLow = Color(0xFFE53935);
 const _kColorMid = Color(0xFF43A047);
@@ -88,7 +89,13 @@ class _DeckWidgetState extends State<DeckWidget> {
                             cubit: cubit,
                           ),
                   ),
-                  _SeekSlider(config: config, cubit: cubit),
+                  if (config.waveform != null)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 4, 6, 0),
+                      child: WaveformStrip(config: config, cubit: cubit),
+                    )
+                  else
+                    _SeekSlider(config: config, cubit: cubit),
                   _Controls(config: config, cubit: cubit, state: state),
                 ],
               ),
@@ -226,7 +233,7 @@ class _VinylArea extends StatefulWidget {
 /// The platter: turns at 33⅓ rpm with the track, stops under a finger and
 /// scratches as the finger moves (one revolution = 1.8 s of track).
 class _VinylAreaState extends State<_VinylArea> with SingleTickerProviderStateMixin {
-  late final Ticker _ticker = createTicker((_) => _updateAngle());
+  late final Ticker _ticker;
   final _angle = ValueNotifier<double>(0);
   int? _pointer;
   double? _lastAngle;
@@ -238,6 +245,7 @@ class _VinylAreaState extends State<_VinylArea> with SingleTickerProviderStateMi
   @override
   void initState() {
     super.initState();
+    _ticker = createTicker((_) => _updateAngle()); // not lazily: dispose() would create it too late
     _syncTicker();
   }
 

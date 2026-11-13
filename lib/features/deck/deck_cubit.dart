@@ -155,7 +155,14 @@ class DeckCubit extends Cubit<DeckState> {
 
       final dur = _engine.currentDuration(deckId) ?? Duration.zero;
       debugPrint('[Deck $deckId] load OK, hasDsp=$hasDsp, duration=${dur.inSeconds}s');
-      emit(DeckReady(state.config.copyWith(duration: dur, hasDsp: hasDsp)));
+      _beatClock.offset = Duration.zero;
+      emit(DeckReady(state.config.copyWith(
+        duration: dur,
+        hasDsp: hasDsp,
+        clearWaveform: true,
+        beatOffset: Duration.zero,
+      )));
+      unawaited(_applyAnalysis(gen, track));
     } catch (e) {
       if (gen != _loadGen || isClosed) return;
       debugPrint('[Deck $deckId] load FAILED: $e');
@@ -163,6 +170,26 @@ class DeckCubit extends Cubit<DeckState> {
       if (streaming) rethrow;
     }
   }
+
+  /// Waveform and beat grid once the background analysis is done.
+  Future<void> _applyAnalysis(int gen, Track track) async {
+    final analysis = await _engine.analysis(deckId);
+    if (analysis == null || gen != _loadGen || isClosed || state is! DeckReady) return;
+    final offset = track.bpm == null ? null : analysis.beatOffset(track.bpm!.toDouble());
+    if (offset != null) _beatClock.offset = offset;
+    emit(DeckReady(state.config.copyWith(waveform: analysis.peaks, beatOffset: offset)));
+  }
+
+  /// TAP: the beat is now. Sets the grid phase for roll, beatskip and loops.
+  void tapBeat() {
+    if (state is! DeckReady || state.config.track?.bpm == null) return;
+    final offset = _beatClock.phaseAt(displayPosition);
+    _beatClock.offset = offset;
+    emit(DeckReady(state.config.copyWith(beatOffset: offset)));
+  }
+
+  /// Beat length in track time, for drawing the grid.
+  Duration get beatDuration => _beatClock.beatDuration;
 
   // Best-effort: failure just means no DSP EQ/FX on this track.
   Future<String?> _resolveProgressive(Track track) async {

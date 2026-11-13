@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:bloc_test/bloc_test.dart';
 import 'package:dj_deckify/features/deck/deck_cubit.dart';
 import 'package:dj_deckify/features/deck/deck_registry.dart';
@@ -31,12 +33,15 @@ void main() {
       final config = const DeckConfig(id: 1, track: _track).copyWith(
         position: const Duration(minutes: 1, seconds: 23),
         duration: const Duration(minutes: 3, seconds: 45),
+        waveform: Uint8List.fromList(List.generate(4500, (i) => i * 37 % 256)),
       );
       when(() => deck.state).thenReturn(DeckReady(config));
       when(() => deck.deckId).thenReturn(1);
       when(() => deck.canScratch).thenReturn(true);
       when(() => deck.platterAngle).thenReturn(0);
       when(() => deck.platterIdle).thenReturn(true);
+      when(() => deck.displayPosition).thenReturn(const Duration(minutes: 1, seconds: 23));
+      when(() => deck.beatDuration).thenReturn(const Duration(milliseconds: 484));
 
       await tester.pumpWidget(MaterialApp(
         home: Scaffold(

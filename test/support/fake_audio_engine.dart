@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:dj_deckify/core/track_analysis.dart';
 import 'package:dj_deckify/services/audio_engine.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_audio/just_audio.dart' show PlayerState, ProcessingState;
@@ -91,6 +92,10 @@ class FakeAudioEngine extends Fake implements AudioEngine {
 
   @override
   bool canReverse(int deckId) => reversible.contains(deckId);
+
+  final analyses = <int, TrackAnalysis>{};
+  @override
+  Future<TrackAnalysis?> analysis(int deckId) async => analyses[deckId];
   @override
   void follow(int deckId, Duration? at, double rate) => follows.putIfAbsent(deckId, () => []).add(at);
   @override

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
@@ -8,6 +9,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_soloud/flutter_soloud.dart' as soloud;
 import 'package:just_audio/just_audio.dart';
 
+import '../core/track_analysis.dart';
 import '../models/deck_config.dart';
 import '../models/fx.dart';
 import 'scratch_voice.dart';
@@ -21,7 +23,10 @@ class _DspDeck {
   /// Set when the deck plays decoded PCM: scratchable, backwards included.
   final ScratchVoice? voice;
 
-  _DspDeck({required this.source, required this.handle, this.voice});
+  /// Waveform and onsets of the decoded track, computed in the background.
+  final Future<TrackAnalysis?>? analysis;
+
+  _DspDeck({required this.source, required this.handle, this.voice, this.analysis});
 }
 
 /// A newer load for the same deck took over while this one was downloading.
@@ -207,7 +212,7 @@ class AudioEngine {
         throw LoadSuperseded();
       }
       _neutralizeFilters(voice.source, voice.handle);
-      _dsp[deckId] = _DspDeck(source: voice.source, handle: voice.handle, voice: voice);
+      _dsp[deckId] = _DspDeck(source: voice.source, handle: voice.handle, voice: voice, analysis: _analyze(pcm));
       _startPositionPolling(deckId, voice.source);
       debugPrint('[AudioEngine] deck $deckId → scratch voice (${pcm.duration.inSeconds} s, '
           'download $downloaded ms, decode ${sw.elapsedMilliseconds - downloaded} ms)');
@@ -219,6 +224,26 @@ class AudioEngine {
       return false;
     }
   }
+
+  /// Reads the PCM from another isolate; [pcm] stays referenced until the
+  /// future completes, so its native memory can't be freed underneath.
+  static Future<TrackAnalysis?> _analyze(DecodedPcm pcm) async {
+    final address = pcm.address, length = pcm.samples.length;
+    final channels = pcm.channels, rate = pcm.sampleRate;
+    try {
+      return await Isolate.run(
+        () => TrackAnalysis.of(DecodedPcm.view(address, length), channels: channels, sampleRate: rate),
+      );
+    } catch (e) {
+      debugPrint('[AudioEngine] analysis failed: $e');
+      return null;
+    } finally {
+      pcm.samples.length; // keep alive
+    }
+  }
+
+  /// Waveform and onsets of a PCM deck's track; null for other decks.
+  Future<TrackAnalysis?> analysis(int deckId) => _dsp[deckId]?.analysis ?? Future.value();
 
   static Future<Uint8List> _download(String url) async {
     final client = HttpClient();

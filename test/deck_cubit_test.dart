@@ -1,6 +1,9 @@
 import 'dart:math' as math;
 
+import 'dart:typed_data';
+
 import 'package:dj_deckify/core/platter.dart';
+import 'package:dj_deckify/core/track_analysis.dart';
 import 'package:dj_deckify/features/deck/deck_cubit.dart';
 import 'package:dj_deckify/features/deck/deck_state.dart';
 import 'package:dj_deckify/models/deck_config.dart';
@@ -93,6 +96,24 @@ void main() {
     deck.setPartyRole(null);
     expect(deck.state.config.partyRole, isNull);
     expect(deck.state.isPlaying, isTrue);
+  });
+
+  test('a PCM deck gets its waveform and a detected beat grid', () async {
+    const withBpm = Track(id: 'sc:3', title: 'Three', artist: 'C', scId: 3, bpm: 120);
+    final onsets = Float32List(3000);
+    for (var i = 12; i < onsets.length; i += 50) {
+      onsets[i] = 1; // a beat every 0.5 s from 0.12 s
+    }
+    engine.analyses[1] = TrackAnalysis(Uint8List(600), onsets);
+    await deck.loadTrack(withBpm, streaming: true);
+    await pumpEventQueue();
+    expect(deck.state.config.waveform, hasLength(600));
+    expect(deck.state.config.beatOffset.inMilliseconds, closeTo(120, 5));
+
+    engine.seek(1, const Duration(milliseconds: 2300));
+    await pumpEventQueue();
+    deck.tapBeat();
+    expect(deck.state.config.beatOffset, const Duration(milliseconds: 300));
   });
 
   group('platter', () {

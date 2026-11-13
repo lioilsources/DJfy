@@ -67,5 +67,12 @@ void main() {
       sw.us += 700000;
       expect(clock.estimatedPosition, const Duration(seconds: 5));
     });
-  });
+  
+    test('the grid can start off zero (beat offset)', () {
+      final clock = BeatClock(bpm: 120)..offset = const Duration(milliseconds: 120);
+      expect(clock.quantizeToBeat(const Duration(milliseconds: 1300)), const Duration(milliseconds: 1120));
+      expect(clock.quantizeToBeat(const Duration(milliseconds: 1400)), const Duration(milliseconds: 1620));
+      expect(clock.phaseAt(const Duration(milliseconds: 1620)), const Duration(milliseconds: 120));
+    });
+});
 }
