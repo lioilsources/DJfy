@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:dj_deckify/core/track_analysis.dart';
+import 'package:dj_deckify/models/fx.dart';
 import 'package:dj_deckify/services/audio_engine.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_audio/just_audio.dart' show PlayerState, ProcessingState;
@@ -39,9 +41,10 @@ class FakeAudioEngine extends Fake implements AudioEngine {
   Stream<PlayerState> playerStateStream(int deckId) => _stateFor(deckId).stream;
 
   @override
-  Future<bool> loadTrack(int deckId, String hlsUrl, {String? progressiveUrl}) async {
+  Future<bool> loadTrack(int deckId, String hlsUrl, {String? progressiveUrl, bool streaming = false}) async {
     final load = FakeLoad(deckId, hlsUrl);
     loads.add(load);
+    progressive[deckId] = (url: progressiveUrl, streaming: streaming);
     _latest[deckId] = load;
     playing.remove(deckId);
     if (!holdLoads) load.done.complete();
@@ -51,8 +54,11 @@ class FakeAudioEngine extends Fake implements AudioEngine {
       loaded[deckId] = hlsUrl;
       positions[deckId] = Duration.zero;
     }
-    return false;
+    return reversible.contains(deckId); // a PCM deck has DSP
   }
+
+  /// What each deck's last load asked for besides the stream.
+  final progressive = <int, ({String? url, bool streaming})>{};
 
   @override
   Future<void> play(int deckId) async {
@@ -77,6 +83,43 @@ class FakeAudioEngine extends Fake implements AudioEngine {
   Future<void> setCrossfadeGain(int deckId, double gain) async => gains[deckId] = gain;
   @override
   Future<void> setSpeed(int deckId, double speed) async {}
+
+  /// Every rate the platter sent, per deck.
+  final rates = <int, List<double>>{};
+  final seeks = <int, List<Duration>>{};
+
+  @override
+  Future<void> setRate(int deckId, double rate) async => rates.putIfAbsent(deckId, () => []).add(rate);
+
+  /// Decks that play decoded PCM (can go backwards, follow a finger).
+  final reversible = <int>{};
+  final follows = <int, List<Duration?>>{};
+
+  @override
+  bool canReverse(int deckId) => reversible.contains(deckId);
+
+  final loops = <int, ({Duration start, Duration length})?>{};
+  @override
+  void loop(int deckId, Duration start, Duration length) => loops[deckId] = (start: start, length: length);
+  @override
+  void endLoop(int deckId) => loops[deckId] = null;
+
+  final cleared = <FxType>[];
+  @override
+  void setFx(int deckId, FxType type, double x, double y, {Duration? beatDuration, bool engage = false}) {}
+  @override
+  void clearFx(int deckId, FxType type) => cleared.add(type);
+
+  final analyses = <int, TrackAnalysis>{};
+  @override
+  Future<TrackAnalysis?> analysis(int deckId) async => analyses[deckId];
+  @override
+  void follow(int deckId, Duration? at, double rate) => follows.putIfAbsent(deckId, () => []).add(at);
+  @override
+  Future<void> seekTo(int deckId, Duration position) async {
+    seeks.putIfAbsent(deckId, () => []).add(position);
+    seek(deckId, position);
+  }
   @override
   Duration positionSync(int deckId) => positions[deckId] ?? Duration.zero;
   @override

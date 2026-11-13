@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:bloc_test/bloc_test.dart';
 import 'package:dj_deckify/features/deck/deck_cubit.dart';
 import 'package:dj_deckify/features/deck/deck_registry.dart';
@@ -6,6 +8,7 @@ import 'package:dj_deckify/features/deck/deck_state.dart';
 import 'package:dj_deckify/features/deck/deck_widget.dart';
 import 'package:dj_deckify/features/mixer/mixer_cubit.dart';
 import 'package:dj_deckify/models/deck_config.dart';
+import 'package:dj_deckify/models/fx.dart';
 import 'package:dj_deckify/models/track.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -19,6 +22,8 @@ class _Deck extends MockCubit<DeckState> implements DeckCubit {}
 const _track = Track(id: 'sc:1', title: 'A rather long track title', artist: 'Some Artist', scId: 1, bpm: 124);
 
 void main() {
+  setUpAll(() => registerFallbackValue(FxType.hiLo));
+
   // Logical screen width → width of one grid cell for two or more decks.
   final screens = {'iPhone mini': 360.0, 'iPhone': 402.0, 'iPhone Pro Max': 440.0, 'iPad': 820.0};
 
@@ -31,9 +36,16 @@ void main() {
       final config = const DeckConfig(id: 1, track: _track).copyWith(
         position: const Duration(minutes: 1, seconds: 23),
         duration: const Duration(minutes: 3, seconds: 45),
+        waveform: Uint8List.fromList(List.generate(4500, (i) => i * 37 % 256)),
       );
       when(() => deck.state).thenReturn(DeckReady(config));
       when(() => deck.deckId).thenReturn(1);
+      when(() => deck.canScratch).thenReturn(true);
+      when(() => deck.platterAngle).thenReturn(0);
+      when(() => deck.platterIdle).thenReturn(true);
+      when(() => deck.displayPosition).thenReturn(const Duration(minutes: 1, seconds: 23));
+      when(() => deck.beatDuration).thenReturn(const Duration(milliseconds: 484));
+      when(() => deck.fxAvailable(any())).thenReturn(true);
 
       await tester.pumpWidget(MaterialApp(
         home: Scaffold(
@@ -48,6 +60,12 @@ void main() {
       ));
 
       expect(tester.takeException(), isNull);
+
+      // FX mode: a smaller platter above the pad, still fitting.
+      await tester.tap(find.text('FX'));
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      expect(find.byType(CustomPaint), findsWidgets);
     });
   }
 

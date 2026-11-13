@@ -1,12 +1,18 @@
 import 'dart:async';
+import 'dart:io';
+import 'dart:isolate';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart';
+import 'package:djfy_decoder/djfy_decoder.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_soloud/flutter_soloud.dart' as soloud;
 import 'package:just_audio/just_audio.dart';
 
+import '../core/track_analysis.dart';
 import '../models/deck_config.dart';
 import '../models/fx.dart';
+import 'scratch_voice.dart';
 
 /// Per-deck DSP state — only present when a progressive URL was loaded into
 /// SoLoud (i.e. [DeckConfig.hasDsp] == true).
@@ -14,7 +20,19 @@ class _DspDeck {
   final soloud.AudioSource source;
   soloud.SoundHandle handle;
 
-  _DspDeck({required this.source, required this.handle});
+  /// Set when the deck plays decoded PCM: scratchable, backwards included.
+  final ScratchVoice? voice;
+
+  /// Waveform and onsets of the decoded track, computed in the background.
+  final Future<TrackAnalysis?>? analysis;
+
+  _DspDeck({required this.source, required this.handle, this.voice, this.analysis});
+}
+
+/// A newer load for the same deck took over while this one was downloading.
+class LoadSuperseded implements Exception {
+  @override
+  String toString() => 'load superseded';
 }
 
 /// Pure x/y → filter-parameter math for the FX pad, extracted so it can be
@@ -48,9 +66,19 @@ class FxParamMapper {
   static double echoWet(double y) => y * 0.8;
   static double echoDecay(double y) => 0.3 + y * 0.6;
 
-  /// 8-bit samplerate crush, exponential 22 kHz → 800 Hz.
-  static double eightBitSamplerate(double x) =>
+  /// Crush samplerate, exponential 22 kHz → 800 Hz.
+  static double crushSamplerate(double x) =>
       22000 * math.pow(800 / 22000, x).toDouble();
+
+  /// Crush bit depth: 8 bits at the bottom of the pad, 2 at the top.
+  static double crushBitdepth(double y) => 8 - y * 6;
+
+  /// Brake: how long the record takes to coast to a stop.
+  static double brakeSeconds(double x) => 0.25 + x * 1.75;
+
+  /// Spin: how long the backspin lasts, and how hard it's thrown.
+  static double spinSeconds(double x) => 0.5 + x * 1.5;
+  static double spinStrength(double y) => 1 + y * 3;
 
   /// Roll slice length in beats: {1/2, 1/4, 1/8, 1/16}.
   static double rollBeats(double x) => switch ((x * 4).floor().clamp(0, 3)) {
@@ -73,9 +101,10 @@ class FxParamMapper {
 
 /// Unified audio engine managing per-deck playback.
 ///
-/// * **Progressive MP3 URL** → played via `flutter_soloud` for real-time DSP
-///   (3-band EQ kills + Pacemaker-style FX). Position/duration are polled via
-///   a periodic [Timer].
+/// * **Progressive MP3 URL** → downloaded, decoded to PCM and played by a
+///   [ScratchVoice] (our own playhead into a SoLoud buffer stream): real
+///   scratching, sample-accurate loops, and SoLoud's filters for EQ/FX.
+///   If decoding fails, SoLoud plays the file itself (DSP, no reverse).
 /// * **HLS URL** (or any `.m3u8` / `hls` URL) → played via `just_audio` as
 ///   before, but without DSP. EQ/FX controls are disabled in that case.
 class AudioEngine {
@@ -99,10 +128,43 @@ class AudioEngine {
   final Map<int, double> _baseVolume = {};
   final Map<int, double> _xfGain = {};
 
+  // ── Platter rate: a held record is muted, not paused ───────────────────────
+  final Map<int, double> _scratchGain = {};
+  final Map<int, double> _sentSpeed = {};
+
+  /// Slowest and fastest speed the players take; neither plays backwards.
+  static const minRate = 0.05;
+  static const maxRate = 4.0;
+
   // ── Init ────────────────────────────────────────────────────────────────────
+  /// 512 frames ≈ 11.6 ms per mix at 44.1 kHz; the default 2048 adds ~46 ms
+  /// between a finger on the platter and the sound (spike, handoff 05).
+  static const mixerBufferFrames = 512;
+
   static Future<void> initSoLoud() async {
-    await soloud.SoLoud.instance.init();
+    await soloud.SoLoud.instance.init(bufferSize: mixerBufferFrames);
+    instance._lifecycle; // start following foreground/background
   }
+
+  /// Decoded tracks take ~10 MB a minute; cap how many decks hold one.
+  static const maxVoices = 4;
+  static const _maxDownloadBytes = 40 << 20;
+  static const _downloadTimeout = Duration(seconds: 20);
+
+  /// Party tracks start from a stream: give up on PCM after this and stream.
+  static const streamingVoiceDeadline = Duration(seconds: 8);
+
+  final Map<int, int> _loadSeq = {};
+
+  bool _background = false;
+  late final AppLifecycleListener _lifecycle = AppLifecycleListener(onStateChange: (state) {
+    final background = state == AppLifecycleState.hidden || state == AppLifecycleState.paused;
+    if (background == _background) return;
+    _background = background;
+    for (final d in _dsp.values) {
+      d.voice?.background = background;
+    }
+  });
 
   // ── Load ────────────────────────────────────────────────────────────────────
 
@@ -114,16 +176,24 @@ class AudioEngine {
   ///
   /// Returns true if DSP (SoLoud) was activated, false for the just_audio
   /// fallback. Throws if the fallback can't load either.
+  /// [streaming] (party): PCM only if it's ready within
+  /// [streamingVoiceDeadline], otherwise straight to just_audio.
   Future<bool> loadTrack(
     int deckId,
     String hlsUrl, {
     String? progressiveUrl,
+    bool streaming = false,
   }) async {
     // Tear down any existing SoLoud state for this deck
     _disposeDsp(deckId);
+    final seq = _loadSeq[deckId] = (_loadSeq[deckId] ?? 0) + 1;
 
     if (progressiveUrl != null && progressiveUrl.isNotEmpty && !isHlsUrl(progressiveUrl)) {
-      if (await _loadViaSoLoud(deckId, progressiveUrl)) return true;
+      final voices = _dsp.values.where((d) => d.voice != null).length;
+      final deadline = streaming ? streamingVoiceDeadline : _downloadTimeout;
+      if (voices < maxVoices && await _loadViaVoice(deckId, progressiveUrl, seq, deadline)) return true;
+      if (_loadSeq[deckId] != seq) throw LoadSuperseded();
+      if (!streaming && await _loadViaSoLoud(deckId, progressiveUrl)) return true;
     }
     await _loadViaJustAudio(deckId, hlsUrl);
     return false;
@@ -148,6 +218,105 @@ class AudioEngine {
     await player.setVolume(_effectiveVolume(deckId));
   }
 
+  Future<bool> _loadViaVoice(int deckId, String url, int seq, Duration deadline) async {
+    try {
+      final sw = Stopwatch()..start();
+      final bytes = await _download(url).timeout(deadline);
+      final downloaded = sw.elapsedMilliseconds;
+      final pcm = await decodeMp3(bytes).timeout(deadline - sw.elapsed);
+      if (_loadSeq[deckId] != seq) throw LoadSuperseded();
+      if (pcm == null) {
+        debugPrint('[AudioEngine] deck $deckId: not a decodable MP3');
+        return false;
+      }
+      final voice = await ScratchVoice.start(
+        pcm,
+        volume: _effectiveVolume(deckId),
+        background: _background,
+        prepareFilters: _activateFilters,
+        onEnded: () => _emitState(deckId, playing: false, completed: true),
+      );
+      if (_loadSeq[deckId] != seq) {
+        await voice.dispose();
+        throw LoadSuperseded();
+      }
+      _neutralizeFilters(voice.source, voice.handle);
+      _dsp[deckId] = _DspDeck(source: voice.source, handle: voice.handle, voice: voice, analysis: _analyze(pcm));
+      _startPositionPolling(deckId, voice.source);
+      debugPrint('[AudioEngine] deck $deckId → scratch voice (${pcm.duration.inSeconds} s, '
+          'download $downloaded ms, decode ${sw.elapsedMilliseconds - downloaded} ms)');
+      return true;
+    } on LoadSuperseded {
+      rethrow;
+    } catch (e) {
+      debugPrint('[AudioEngine] scratch voice failed ($e), deck $deckId');
+      return false;
+    }
+  }
+
+  /// Reads the PCM from another isolate; [pcm] stays referenced until the
+  /// future completes, so its native memory can't be freed underneath.
+  static Future<TrackAnalysis?> _analyze(DecodedPcm pcm) async {
+    final address = pcm.address, length = pcm.samples.length;
+    final channels = pcm.channels, rate = pcm.sampleRate;
+    try {
+      return await Isolate.run(
+        () => TrackAnalysis.of(DecodedPcm.view(address, length), channels: channels, sampleRate: rate),
+      );
+    } catch (e) {
+      debugPrint('[AudioEngine] analysis failed: $e');
+      return null;
+    } finally {
+      pcm.samples.length; // keep alive
+    }
+  }
+
+  /// Waveform and onsets of a PCM deck's track; null for other decks.
+  Future<TrackAnalysis?> analysis(int deckId) => _dsp[deckId]?.analysis ?? Future.value();
+
+  static Future<Uint8List> _download(String url) async {
+    final client = HttpClient();
+    try {
+      final res = await (await client.getUrl(Uri.parse(url))).close();
+      if (res.statusCode != 200) throw HttpException('HTTP ${res.statusCode}', uri: Uri.parse(url));
+      final out = BytesBuilder(copy: false);
+      await for (final chunk in res) {
+        out.add(chunk);
+        if (out.length > _maxDownloadBytes) throw const HttpException('track too large');
+      }
+      return out.takeBytes();
+    } finally {
+      client.close(force: true);
+    }
+  }
+
+  /// Filters must be activated BEFORE play(): filter instances are cloned
+  /// onto the voice at play time; a later activate() never reaches it.
+  static void _activateFilters(soloud.AudioSource source) {
+    final f = source.filters;
+    f.equalizerFilter.activate();
+    f.biquadFilter.activate();
+    f.echoFilter.activate();
+    f.freeverbFilter.activate();
+    f.lofiFilter.activate();
+  }
+
+  /// Neutralize per-voice params before anything is heard. Every call needs
+  /// `soundHandle:` — without it the value goes to the (inactive) global
+  /// filter chain and is silently dropped.
+  static void _neutralizeFilters(soloud.AudioSource source, soloud.SoundHandle handle) {
+    final f = source.filters;
+    f.biquadFilter.wet(soundHandle: handle).value = 0;
+    f.biquadFilter.frequency(soundHandle: handle).value = 16000;
+    // Echo buffer size is fixed from `delay` at the first audio-process
+    // callback and can never grow afterwards — reserve 1 s of headroom now.
+    f.echoFilter.wet(soundHandle: handle).value = 0;
+    f.echoFilter.delay(soundHandle: handle).value = 1.0;
+    f.echoFilter.decay(soundHandle: handle).value = 0.5;
+    f.freeverbFilter.wet(soundHandle: handle).value = 0; // default is 1!
+    f.lofiFilter.wet(soundHandle: handle).value = 0; // default is 1!
+  }
+
   Future<bool> _loadViaSoLoud(int deckId, String url) async {
     try {
       // loadUrl downloads the whole file before returning; don't let a slow
@@ -158,14 +327,7 @@ class AudioEngine {
         throw TimeoutException('SoLoud loadUrl', _soloudLoadTimeout);
       });
 
-      // Filters must be activated BEFORE play(): filter instances are cloned
-      // onto the voice at play time; a later activate() never reaches it.
-      final f = source.filters;
-      f.equalizerFilter.activate();
-      f.biquadFilter.activate();
-      f.echoFilter.activate();
-      f.freeverbFilter.activate();
-      f.lofiFilter.activate();
+      _activateFilters(source);
 
       final handle = await soloud.SoLoud.instance.play(
         source,
@@ -173,18 +335,7 @@ class AudioEngine {
         volume: _effectiveVolume(deckId),
       );
 
-      // Neutralize per-voice params before the first unpause. Every call needs
-      // `soundHandle:` — without it the value goes to the (inactive) global
-      // filter chain and is silently dropped.
-      f.biquadFilter.wet(soundHandle: handle).value = 0;
-      f.biquadFilter.frequency(soundHandle: handle).value = 16000;
-      // Echo buffer size is fixed from `delay` at the first audio-process
-      // callback and can never grow afterwards — reserve 1 s of headroom now.
-      f.echoFilter.wet(soundHandle: handle).value = 0;
-      f.echoFilter.delay(soundHandle: handle).value = 1.0;
-      f.echoFilter.decay(soundHandle: handle).value = 0.5;
-      f.freeverbFilter.wet(soundHandle: handle).value = 0; // default is 1!
-      f.lofiFilter.wet(soundHandle: handle).value = 0; // default is 1!
+      _neutralizeFilters(source, handle);
 
       _dsp[deckId] = _DspDeck(source: source, handle: handle);
       _startPositionPolling(deckId, source);
@@ -203,7 +354,10 @@ class AudioEngine {
   /// stall the caller for the whole song.
   Future<void> play(int deckId) async {
     final dsp = _dsp[deckId];
-    if (dsp != null) {
+    if (dsp?.voice case final voice?) {
+      voice.playing = true;
+      _emitState(deckId, playing: true);
+    } else if (dsp != null) {
       soloud.SoLoud.instance.setPause(dsp.handle, false);
       _emitState(deckId, playing: true);
     } else {
@@ -215,7 +369,10 @@ class AudioEngine {
 
   Future<void> pause(int deckId) async {
     final dsp = _dsp[deckId];
-    if (dsp != null) {
+    if (dsp?.voice case final voice?) {
+      voice.playing = false;
+      _emitState(deckId, playing: false);
+    } else if (dsp != null) {
       soloud.SoLoud.instance.setPause(dsp.handle, true);
       _emitState(deckId, playing: false);
     } else {
@@ -225,13 +382,16 @@ class AudioEngine {
 
   /// Stops the deck and drops its loaded track, keeping the player for reuse.
   Future<void> stop(int deckId) async {
+    _loadSeq[deckId] = (_loadSeq[deckId] ?? 0) + 1; // cancels a download in flight
     _disposeDsp(deckId);
     await playerFor(deckId).stop();
   }
 
   Future<void> seekTo(int deckId, Duration position) async {
     final dsp = _dsp[deckId];
-    if (dsp != null) {
+    if (dsp?.voice case final voice?) {
+      voice.seek(position);
+    } else if (dsp != null) {
       soloud.SoLoud.instance.seek(dsp.handle, position);
     } else {
       await playerFor(deckId).seek(position);
@@ -239,6 +399,35 @@ class AudioEngine {
   }
 
   Future<void> setSpeed(int deckId, double speed) async {
+    _sentSpeed[deckId] = speed;
+    final dsp = _dsp[deckId];
+    if (dsp?.voice case final voice?) {
+      voice.rate = speed;
+    } else if (dsp != null) {
+      soloud.SoLoud.instance.setRelativePlaySpeed(dsp.handle, speed);
+    } else {
+      await playerFor(deckId).setSpeed(speed);
+    }
+  }
+
+  /// Follows the platter: [rate] is signed, 1 = normal. Neither engine plays
+  /// backwards or at 0, so below [minRate] the deck is muted (it keeps
+  /// reporting "playing", the way a held record still turns under the motor)
+  /// and the caller seeks to move it back.
+  Future<void> setRate(int deckId, double rate) async {
+    if (_dsp[deckId]?.voice case final voice?) {
+      voice.rate = rate; // the voice plays any rate, and fades out when still
+      return;
+    }
+    final still = rate.abs() < minRate;
+    final gain = still ? 0.0 : 1.0;
+    if ((_scratchGain[deckId] ?? 1) != gain) {
+      _scratchGain[deckId] = gain;
+      await _applyVolume(deckId);
+    }
+    final speed = rate.abs().clamp(minRate, maxRate);
+    if (speed == _sentSpeed[deckId]) return;
+    _sentSpeed[deckId] = speed;
     final dsp = _dsp[deckId];
     if (dsp != null) {
       soloud.SoLoud.instance.setRelativePlaySpeed(dsp.handle, speed);
@@ -260,7 +449,7 @@ class AudioEngine {
   }
 
   double _effectiveVolume(int deckId) =>
-      (_baseVolume[deckId] ?? 0.8) * (_xfGain[deckId] ?? 1.0);
+      (_baseVolume[deckId] ?? 0.8) * (_xfGain[deckId] ?? 1.0) * (_scratchGain[deckId] ?? 1.0);
 
   Future<void> _applyVolume(int deckId) async {
     final volume = _effectiveVolume(deckId);
@@ -305,12 +494,23 @@ class AudioEngine {
 
   bool hasDsp(int deckId) => _dsp.containsKey(deckId);
 
+  /// The deck plays decoded PCM: it can go backwards and follow a finger.
+  bool canReverse(int deckId) => _dsp[deckId]?.voice != null;
+
+  /// A finger holds the record at [at], moving at [rate]; null lets go.
+  /// Only for [canReverse] decks.
+  void follow(int deckId, Duration? at, double rate) => _dsp[deckId]?.voice?.follow(at, rate);
+
+  /// Sample-accurate loop of [length] from [start] (roll, loop); [canReverse] decks only.
+  void loop(int deckId, Duration start, Duration length) => _dsp[deckId]?.voice?.loop(start, length);
+  void endLoop(int deckId) => _dsp[deckId]?.voice?.endLoop();
+
   // ── FX (Pacemaker-style pad) ───────────────────────────────────────────────
 
   /// Applies a continuous FX with pad coordinates x, y ∈ [0, 1].
   /// [beatDuration] is used by echo for beat-synced delays.
   ///
-  /// Roll and beatskip are seek-based and live in DeckCubit, not here.
+  /// Roll, beatskip, brake and spin move the playhead and live in DeckCubit.
   void setFx(
     int deckId,
     FxType type,
@@ -355,6 +555,7 @@ class AudioEngine {
               FxParamMapper.hiLoResonance(y);
           apply(f.biquadFilter.wet(soundHandle: h), 1);
         case FxType.echo:
+          _echoGen[deckId] = (_echoGen[deckId] ?? 0) + 1; // cancels a tail still ringing
           final beat = beatDuration ?? const Duration(milliseconds: 500);
           final delay = (FxParamMapper.echoBeats(x) *
                   beat.inMicroseconds /
@@ -367,13 +568,15 @@ class AudioEngine {
         case FxType.reverb:
           f.freeverbFilter.roomSize(soundHandle: h).value = x;
           apply(f.freeverbFilter.wet(soundHandle: h), y);
-        case FxType.eightBit:
+        case FxType.crush:
           f.lofiFilter.samplerate(soundHandle: h).value =
-              FxParamMapper.eightBitSamplerate(x);
-          f.lofiFilter.bitdepth(soundHandle: h).value = 5;
-          apply(f.lofiFilter.wet(soundHandle: h), y);
+              FxParamMapper.crushSamplerate(x);
+          f.lofiFilter.bitdepth(soundHandle: h).value = FxParamMapper.crushBitdepth(y);
+          apply(f.lofiFilter.wet(soundHandle: h), 1);
         case FxType.roll:
         case FxType.beatskip:
+        case FxType.brake:
+        case FxType.spin:
           break;
       }
     } catch (e) {
@@ -397,19 +600,19 @@ class AudioEngine {
               .fadeFilterParameter(to: 0, time: fade);
           f.biquadFilter.frequency(soundHandle: h).value = 16000;
         case FxType.echo:
-          f.echoFilter
-              .wet(soundHandle: h)
-              .fadeFilterParameter(to: 0, time: fade);
+          _echoTail(deckId, dsp);
         case FxType.reverb:
           f.freeverbFilter
               .wet(soundHandle: h)
               .fadeFilterParameter(to: 0, time: fade);
-        case FxType.eightBit:
+        case FxType.crush:
           f.lofiFilter
               .wet(soundHandle: h)
               .fadeFilterParameter(to: 0, time: fade);
         case FxType.roll:
         case FxType.beatskip:
+        case FxType.brake:
+        case FxType.spin:
           break;
       }
     } catch (e) {
@@ -417,10 +620,28 @@ class AudioEngine {
     }
   }
 
+  final Map<int, int> _echoGen = {};
+
+  /// Lets the echoes ring out (Pacemaker) instead of cutting them: the
+  /// feedback fades over at least two repeats, then the effect closes.
+  void _echoTail(int deckId, _DspDeck dsp) {
+    final f = dsp.source.filters.echoFilter;
+    final h = dsp.handle;
+    final gen = _echoGen[deckId] = (_echoGen[deckId] ?? 0) + 1;
+    final delay = f.delay(soundHandle: h).value;
+    final tail = Duration(milliseconds: math.max(600, (delay * 2000).round()));
+    f.decay(soundHandle: h).fadeFilterParameter(to: 0, time: tail);
+    Timer(tail, () {
+      if (_echoGen[deckId] != gen || !identical(_dsp[deckId], dsp)) return; // re-engaged or reloaded
+      f.wet(soundHandle: h).fadeFilterParameter(to: 0, time: const Duration(milliseconds: 50));
+    });
+  }
+
   /// Synchronous position read (bypasses the 200 ms poll) — used to anchor
   /// the BeatClock for roll/beatskip.
   Duration positionSync(int deckId) {
     final dsp = _dsp[deckId];
+    if (dsp?.voice case final voice?) return voice.position;
     if (dsp != null) {
       return soloud.SoLoud.instance.getPosition(dsp.handle);
     }
@@ -458,6 +679,7 @@ class AudioEngine {
 
   Duration? currentDuration(int deckId) {
     final dsp = _dsp[deckId];
+    if (dsp?.voice case final voice?) return voice.duration;
     if (dsp != null) {
       return soloud.SoLoud.instance.getLength(dsp.source);
     }
@@ -469,11 +691,15 @@ class AudioEngine {
   void _startPositionPolling(int deckId, soloud.AudioSource source) {
     _timers[deckId]?.cancel();
 
-    _ensureDurCtrl(deckId).add(soloud.SoLoud.instance.getLength(source));
+    _ensureDurCtrl(deckId).add(currentDuration(deckId));
 
     _timers[deckId] = Timer.periodic(const Duration(milliseconds: 200), (_) {
       final dsp = _dsp[deckId];
       if (dsp == null) return;
+      if (dsp.voice case final voice?) {
+        _ensurePosCtrl(deckId).add(voice.position); // the end comes from the voice
+        return;
+      }
 
       final pos = soloud.SoLoud.instance.getPosition(dsp.handle);
       _ensurePosCtrl(deckId).add(pos);
@@ -515,9 +741,12 @@ class AudioEngine {
   // ── Dispose ────────────────────────────────────────────────────────────────
 
   void _disposeDsp(int deckId) {
+    _sentSpeed.remove(deckId);
     _timers.remove(deckId)?.cancel();
     final dsp = _dsp.remove(deckId);
-    if (dsp != null) {
+    if (dsp?.voice case final voice?) {
+      unawaited(voice.dispose());
+    } else if (dsp != null) {
       soloud.SoLoud.instance.stop(dsp.handle);
       soloud.SoLoud.instance.disposeSource(dsp.source);
     }

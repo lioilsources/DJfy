@@ -28,7 +28,21 @@ class FxSection extends StatelessWidget {
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: _FxPad(config: config, cubit: cubit, enabled: enabled),
+                child: Stack(
+                  children: [
+                    Positioned.fill(child: _FxPad(config: config, cubit: cubit, enabled: enabled)),
+                    if (config.selectedFx.latchable)
+                      Positioned(
+                        right: 2,
+                        top: 2,
+                        child: _LatchButton(
+                          latched: config.fxLatched,
+                          color: config.selectedFx.color,
+                          onTap: enabled ? cubit.toggleFxLatch : null,
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
           ],
@@ -57,8 +71,7 @@ class _FxSelector extends StatelessWidget {
       child: Row(
         children: FxType.values.map((type) {
           final selected = config.selectedFx == type;
-          final available = enabled &&
-              (!type.needsBpm || config.track?.bpm != null);
+          final available = enabled && cubit.fxAvailable(type);
           final chip = GestureDetector(
             onTap: available ? () => cubit.selectFx(type) : null,
             child: AnimatedContainer(
@@ -102,8 +115,39 @@ class _FxSelector extends StatelessWidget {
           if (type.needsBpm && enabled && config.track?.bpm == null) {
             return Tooltip(message: 'BPM neznámé', child: chip);
           }
+          if (type.needsPcm && enabled && !available) {
+            return Tooltip(message: 'Jen u skladby dekódované do paměti', child: chip);
+          }
           return chip;
         }).toList(),
+      ),
+    );
+  }
+}
+
+/// Latch: the effect stays on after the finger lifts (a latched roll is a loop).
+class _LatchButton extends StatelessWidget {
+  final bool latched;
+  final Color color;
+  final VoidCallback? onTap;
+
+  const _LatchButton({required this.latched, required this.color, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: latched ? 'Uvolnit efekt' : 'Podržet efekt i bez prstu',
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Padding(
+          padding: const EdgeInsets.all(6),
+          child: Icon(
+            latched ? Icons.lock : Icons.lock_open,
+            size: 14,
+            color: latched ? color : Colors.white38,
+          ),
+        ),
       ),
     );
   }
@@ -221,7 +265,7 @@ class FxPadPainter extends CustomPainter {
         _drawBuckets(canvas, size, 4, _bucketLabels());
       case FxType.beatskip:
         _drawBuckets(canvas, size, 6, _bucketLabels());
-      case FxType.reverb || FxType.eightBit:
+      case FxType.reverb || FxType.crush || FxType.brake || FxType.spin:
         break;
     }
 

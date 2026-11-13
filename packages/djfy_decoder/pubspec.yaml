@@ -1,0 +1,28 @@
+name: djfy_decoder
+description: "Whole-file MP3 decoding to 16-bit PCM for DJfy's scratch decks (dr_mp3 via FFI)."
+version: 0.0.1
+publish_to: 'none'
+
+environment:
+  sdk: ^3.11.1
+  flutter: '>=3.3.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  ffi: ^2.1.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        ffiPlugin: true
+      ios:
+        ffiPlugin: true
+      macos:
+        ffiPlugin: true

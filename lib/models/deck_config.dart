@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'fx.dart';
 import 'track.dart';
 
@@ -27,7 +29,19 @@ class DeckConfig {
   final bool fxActive;
   final double fxX;
   final double fxY;
+
+  /// The FX stays on after the finger lifts, until unlatched.
+  final bool fxLatched;
   final PartyDeckRole? partyRole;
+
+  /// Slip mode: after a scratch the track carries on where it would have been.
+  final bool slip;
+
+  /// Waveform peaks (see TrackAnalysis), when the deck plays decoded PCM.
+  final Uint8List? waveform;
+
+  /// Where the beat grid starts; detected from the audio or set with TAP.
+  final Duration beatOffset;
 
   const DeckConfig({
     required this.id,
@@ -47,7 +61,11 @@ class DeckConfig {
     this.fxActive = false,
     this.fxX = 0.5,
     this.fxY = 0.5,
+    this.fxLatched = false,
     this.partyRole,
+    this.slip = false,
+    this.waveform,
+    this.beatOffset = Duration.zero,
   });
 
   DeckConfig copyWith({
@@ -63,8 +81,13 @@ class DeckConfig {
     bool? fxActive,
     double? fxX,
     double? fxY,
+    bool? fxLatched,
     PartyDeckRole? partyRole,
     bool clearPartyRole = false,
+    bool? slip,
+    Uint8List? waveform,
+    bool clearWaveform = false,
+    Duration? beatOffset,
   }) {
     return DeckConfig(
       id: id,
@@ -80,7 +103,11 @@ class DeckConfig {
       fxActive: fxActive ?? this.fxActive,
       fxX: fxX ?? this.fxX,
       fxY: fxY ?? this.fxY,
+      fxLatched: fxLatched ?? this.fxLatched,
       partyRole: clearPartyRole ? null : (partyRole ?? this.partyRole),
+      slip: slip ?? this.slip,
+      waveform: clearWaveform ? null : (waveform ?? this.waveform),
+      beatOffset: beatOffset ?? this.beatOffset,
     );
   }
 }

@@ -43,11 +43,15 @@ lib/
 
 ## Audio
 
-- Dual engine (`lib/services/audio_engine.dart`): progressive MP3 → `flutter_soloud` (real-time DSP: EQ kills, FX pad), HLS → `just_audio` fallback (no DSP)
+- Engine (`lib/services/audio_engine.dart`), three paths: progressive MP3 → downloaded, decoded to PCM (`packages/djfy_decoder`, dr_mp3 via FFI) and played by a `ScratchVoice` (our own playhead, `lib/core/scratch_renderer.dart`, into a SoLoud buffer stream: scratch, backwards, sample-accurate loops, filters); if decoding fails → SoLoud `loadUrl` (DSP, no reverse); HLS → `just_audio` (no DSP). Max 4 PCM decks (~10 MB per minute of track). Party loads take PCM only if it's ready within 8 s.
+- SoLoud mixer runs at 512 frames (`AudioEngine.mixerBufferFrames`): the 2048 default adds ~46 ms to every touch.
+- `ScratchVoice` keeps 40–120 ms of audio ahead of what SoLoud has played (1.5 s in the background). Never `setPause` a buffer-stream voice (SoLoud toggles it while buffering); data must be added after `play()`; after an underrun the stream stays paused until more data arrives. Spike numbers and the open device check (60 ms limit, else move the producer to C) are in `Prompts/05-SCRATCH_DECK_AND_FX.md`.
+- Platter (`lib/core/platter.dart`): 33⅓ rpm, one turn = 1.8 s of track; touch stops the record, the finger's speed is the playback rate, release spins up (τ 0.1 s), brake/backspin coast. `AudioEngine.setRate` is signed; decks that can't reverse are muted when held and pulled back with seeks.
+- Deck widget tickers (platter, waveform) are created in `initState`, never lazily: a lazy `createTicker` first called from `dispose()` asserts.
 - SoLoud filters must be activated BEFORE `play()`, and every param call needs `soundHandle:` (otherwise it targets the inactive global chain)
 - SoLoud's 8-band EqFilter uses sqrt-warped FFT bands: band k covers (k/8)²…((k+1)/8)² of Nyquist (band1 = 0–344 Hz @ 44.1 kHz), NOT octave bands
 - never `await` just_audio's `play()`: it completes when the track ends. `AudioEngine.play` returns right away.
-- Beat grid for Roll/Beatskip/Echo sync: `lib/core/beat_clock.dart` (BPM from GetSongBPM)
+- Beat grid for Roll/Beatskip/Echo sync: `lib/core/beat_clock.dart` (BPM from GetSongBPM, phase `offset` detected by `lib/core/track_analysis.dart` from onsets, or set with TAP)
 - Tempo/BPM matching for smart playlist ordering
 
 ## Party mode (Prompts/01-PARTY_PLAN.md)
