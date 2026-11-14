@@ -111,7 +111,7 @@ class DeckCubit extends Cubit<DeckState> {
   /// deck. A newer load or [eject] silently supersedes this one.
   Future<void> loadTrack(Track track, {bool streaming = false}) async {
     if (!streaming && track.soundcloudStreamUrl == null) {
-      emit(DeckError(state.config, 'Žádný stream URL'));
+      emit(DeckError(state.config, 'Skladba není na SoundCloudu'));
       return;
     }
     final gen = ++_loadGen;
