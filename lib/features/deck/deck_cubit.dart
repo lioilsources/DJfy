@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get_it/get_it.dart';
 import 'package:just_audio/just_audio.dart' show ProcessingState;
+import 'package:ol1n_telemetry/ol1n_telemetry.dart';
 
 import '../../core/beat_clock.dart';
 import '../../core/platter.dart';
@@ -13,6 +14,7 @@ import '../../models/fx.dart';
 import '../../models/track.dart';
 import '../../services/audio_engine.dart';
 import '../../services/soundcloud_service.dart';
+import '../../telemetry/telemetry_dictionary.dart';
 import 'deck_state.dart';
 
 class DeckCubit extends Cubit<DeckState> {
@@ -62,6 +64,16 @@ class DeckCubit extends Cubit<DeckState> {
   Stopwatch? _seekThrottle;
   Stopwatch? _emitThrottle;
 
+  // Statistics for the loaded track: how it was loaded and played, never
+  // which track it is.
+  static const playedAfter = Duration(seconds: 30);
+  TelemetryFlow? _loadFlow;
+  String _source = 'playlist';
+  String? _engineKind;
+  final Stopwatch _playClock = Stopwatch();
+  bool _playReported = true;
+  final Set<FxType> _fxUsed = {};
+
   /// Audio further than this from the finger is pulled back with a seek.
   static const _maxDrift = Duration(milliseconds: 60);
 
@@ -76,6 +88,7 @@ class DeckCubit extends Cubit<DeckState> {
   void _subscribeStreams() {
     _positionSub = _engine.positionStream(deckId).listen((pos) {
       _beatClock.anchor(pos);
+      _reportPlayed();
       final cfg = state.config.copyWith(position: pos);
       if (state is DeckReady) emit(DeckReady(cfg));
     });
@@ -88,6 +101,7 @@ class DeckCubit extends Cubit<DeckState> {
     _stateSub = _engine.playerStateStream(deckId).listen((ps) {
       final playing = ps.playing;
       final atEnd = ps.processingState == ProcessingState.completed;
+      playing && state is DeckReady ? _playClock.start() : _playClock.stop();
       if (atEnd && !_atEnd) _completed.add(null);
       _atEnd = atEnd;
       _beatClock
@@ -110,11 +124,17 @@ class DeckCubit extends Cubit<DeckState> {
   /// rethrown so the caller can move on. Without it, failures only show on the
   /// deck. A newer load or [eject] silently supersedes this one.
   Future<void> loadTrack(Track track, {bool streaming = false}) async {
+    _source = streaming ? 'party' : 'playlist';
+    _endLoadFlow('cancel');
     if (!streaming && track.soundcloudStreamUrl == null) {
+      Telemetry.flow('track_load', {'source': _source}).end('no_stream', const {'engine': 'none'});
       emit(DeckError(state.config, 'Žádný stream URL'));
+      Telemetry.errorShown('no_stream');
       return;
     }
     final gen = ++_loadGen;
+    _loadFlow = Telemetry.flow('track_load', {'source': _source}, () => const {'engine': 'none'});
+    _resetPlayStats();
     _endFxGesture();
     _resetPlatter();
     final loadingConfig = state.config.copyWith(
@@ -153,6 +173,9 @@ class DeckCubit extends Cubit<DeckState> {
         ..playing = false
         ..anchor(Duration.zero);
 
+      _engineKind = _engine.canReverse(deckId) ? 'pcm' : (hasDsp ? 'soloud' : 'stream');
+      _endLoadFlow('ok', _engineKind!);
+      _playReported = false;
       final dur = _engine.currentDuration(deckId) ?? Duration.zero;
       debugPrint('[Deck $deckId] load OK, hasDsp=$hasDsp, duration=${dur.inSeconds}s');
       _beatClock.offset = Duration.zero;
@@ -166,9 +189,34 @@ class DeckCubit extends Cubit<DeckState> {
     } catch (e) {
       if (gen != _loadGen || isClosed) return;
       debugPrint('[Deck $deckId] load FAILED: $e');
+      _endLoadFlow('error');
       emit(DeckError(state.config, e.toString()));
+      // At a party the party reports it (it skips the track).
+      if (!streaming) Telemetry.errorShown('track_load');
       if (streaming) rethrow;
     }
+  }
+
+  void _endLoadFlow(String result, [String engine = 'none']) {
+    _loadFlow?.end(result, {'engine': engine});
+    _loadFlow = null;
+  }
+
+  void _resetPlayStats() {
+    _playClock
+      ..stop()
+      ..reset();
+    _playReported = true;
+    _engineKind = null;
+    _fxUsed.clear();
+  }
+
+  /// The loaded track has played for [playedAfter]: DJfy did its job.
+  void _reportPlayed() {
+    if (_playReported || _playClock.elapsed < playedAfter) return;
+    _playReported = true;
+    Telemetry.track('track_play', {'source': _source, 'engine': _engineKind ?? 'stream'});
+    Telemetry.activation();
   }
 
   /// Waveform and beat grid once the background analysis is done.
@@ -183,6 +231,7 @@ class DeckCubit extends Cubit<DeckState> {
   /// TAP: the beat is now. Sets the grid phase for roll, beatskip and loops.
   void tapBeat() {
     if (state is! DeckReady || state.config.track?.bpm == null) return;
+    Telemetry.feature('tap_beat');
     final offset = _beatClock.phaseAt(displayPosition);
     _beatClock.offset = offset;
     emit(DeckReady(state.config.copyWith(beatOffset: offset)));
@@ -219,6 +268,8 @@ class DeckCubit extends Cubit<DeckState> {
   Future<void> eject() async {
     final gen = ++_loadGen;
     _atEnd = false;
+    _endLoadFlow('cancel');
+    _resetPlayStats();
     _resetPlatter();
     await _engine.stop(deckId);
     if (gen != _loadGen || isClosed) return;
@@ -270,6 +321,7 @@ class DeckCubit extends Cubit<DeckState> {
 
   void toggleEqBand(EqBand band) {
     if (state is! DeckReady || !state.config.hasDsp) return;
+    Telemetry.feature('eq');
     final current = state.config.eqBands[band] ?? true;
     final newActive = !current;
     _engine.setEqBand(deckId, band, newActive);
@@ -293,6 +345,14 @@ class DeckCubit extends Cubit<DeckState> {
   /// Brake or spin actually stopped the record: release spins it back up.
   bool _fxStopped = false;
 
+  /// Why [type] can't be picked right now, for the statistics; null if it can.
+  String? fxLockReason(FxType type) {
+    if (state is! DeckReady || !state.config.hasDsp) return 'fx_no_dsp';
+    if (type.needsBpm && state.config.track?.bpm == null) return 'fx_no_bpm';
+    if (type.needsPcm && !_engine.canReverse(deckId)) return 'fx_no_pcm';
+    return null;
+  }
+
   void selectFx(FxType type) {
     if (state is! DeckReady) return;
     if (state.config.fxActive) _endFxGesture();
@@ -311,6 +371,8 @@ class DeckCubit extends Cubit<DeckState> {
     final type = state.config.selectedFx;
     if (!fxAvailable(type)) return;
     _fxTouching = true;
+    Telemetry.feature('fx');
+    if (_fxUsed.add(type)) Telemetry.track('fx_use', {'fx': fxId(type)});
     // Latched and running: touching again just moves it.
     if (state.config.fxActive && state.config.fxLatched) {
       fxUpdate(x, y);
@@ -470,6 +532,7 @@ class DeckCubit extends Cubit<DeckState> {
   /// A finger lands on the record: it stops right away (vinyl mode).
   void platterTouch() {
     if (!canScratch) return;
+    Telemetry.feature('scratch');
     _braking = false;
     final pos = _engine.positionSync(deckId);
     _touchTarget = pos;
@@ -559,12 +622,14 @@ class DeckCubit extends Cubit<DeckState> {
 
   /// Pitch bend while a nudge button is held: −1, 0 or +1.
   void nudge(int direction) {
+    if (direction != 0) Telemetry.feature('pitch');
     _platter.nudge = direction.sign;
     if (_platter.motorOn) _runPlatter();
   }
 
   void toggleSlip() {
     if (state is! DeckReady) return;
+    Telemetry.feature('slip');
     emit(DeckReady(state.config.copyWith(slip: !state.config.slip)));
   }
 
@@ -681,6 +746,7 @@ class DeckCubit extends Cubit<DeckState> {
 
   @override
   Future<void> close() {
+    _endLoadFlow('cancel');
     _stopPlatter();
     _rollTimer?.cancel();
     _rollStopwatch = null;

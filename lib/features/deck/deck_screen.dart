@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:ol1n_telemetry/ol1n_telemetry.dart';
 import '../../app/theme.dart';
 import '../mixer/mixer_cubit.dart';
 import 'deck_registry.dart';
@@ -44,7 +45,10 @@ class DeckScreen extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 child: TextButton.icon(
-                  onPressed: registry.add,
+                  onPressed: () {
+                    Telemetry.feature('multi_deck');
+                    registry.add();
+                  },
                   icon: const Icon(Icons.add, size: 18),
                   label: const Text('PŘIDAT DECK'),
                   style: TextButton.styleFrom(
@@ -106,7 +110,10 @@ class _CrossfaderRow extends StatelessWidget {
                           value: state.crossfade,
                           min: 0,
                           max: 1,
-                          onChanged: mixer.setCrossfade,
+                          onChanged: (v) {
+                            Telemetry.feature('crossfader');
+                            mixer.setCrossfade(v);
+                          },
                         ),
                       ),
                     ),

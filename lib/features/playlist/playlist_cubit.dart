@@ -1,4 +1,5 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:ol1n_telemetry/ol1n_telemetry.dart';
 import '../../models/track.dart';
 import '../../services/lastfm_service.dart';
 import '../../services/bpm_service.dart';
@@ -16,6 +17,11 @@ class PlaylistCubit extends Cubit<PlaylistState> {
   Future<void> search(String query) async {
     if (query.trim().isEmpty) return;
     emit(PlaylistSearching(query));
+    // Only the shape of the query is measured, never its text.
+    final flow = Telemetry.flow('playlist_search', {
+      'query_kind': query.contains(' - ') ? 'artist_title' : 'artist',
+    }, () => const {'tracks': 0, 'playable': 0, 'with_bpm': 0});
+    var empty = false;
 
     try {
       Track? seed;
@@ -34,7 +40,10 @@ class PlaylistCubit extends Cubit<PlaylistState> {
       if (seed == null) {
         final artistTracks =
             await _lastFm.getSimilarArtistTracks(query.trim());
-        if (artistTracks.isEmpty) throw Exception('Nic nenalezeno');
+        if (artistTracks.isEmpty) {
+          empty = true;
+          throw Exception('Nic nenalezeno');
+        }
         seed = artistTracks.first;
         similar = artistTracks.skip(1).toList();
       }
@@ -59,8 +68,16 @@ class PlaylistCubit extends Cubit<PlaylistState> {
       }
 
       emit(PlaylistLoaded(seed: seed, tracks: sorted));
+      final all = [seed, ...sorted];
+      flow.end('ok', {
+        'tracks': all.length,
+        'playable': all.where((t) => t.soundcloudStreamUrl != null).length,
+        'with_bpm': all.where((t) => t.bpm != null).length,
+      });
     } catch (e) {
       emit(PlaylistError(e.toString()));
+      flow.end(empty ? 'empty' : 'error', const {'tracks': 0, 'playable': 0, 'with_bpm': 0});
+      Telemetry.errorShown(empty ? 'no_results' : 'search');
     }
   }
 

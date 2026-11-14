@@ -5,6 +5,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:ol1n_telemetry/ol1n_telemetry.dart';
 import '../../app/theme.dart';
 import '../../core/extensions.dart';
 import '../../models/deck_config.dart';
@@ -563,7 +564,10 @@ class _Controls extends StatelessWidget {
             value: config.speed,
             min: 0.7,
             max: 1.3,
-            onChanged: cubit.setSpeed,
+            onChanged: (v) {
+              Telemetry.feature('pitch');
+              cubit.setSpeed(v);
+            },
             leading: _NudgeButton(icon: Icons.remove, onHold: canPlay ? (on) => cubit.nudge(on ? -1 : 0) : null),
             trailing: _NudgeButton(icon: Icons.add, onHold: canPlay ? (on) => cubit.nudge(on ? 1 : 0) : null),
           ),
@@ -667,7 +671,7 @@ class _EqKillRow extends StatelessWidget {
           return Tooltip(
             message: enabled ? '' : 'DSP nedostupné (HLS stream)',
             child: GestureDetector(
-              onTap: enabled ? () => cubit.toggleEqBand(type) : null,
+              onTap: enabled ? () => cubit.toggleEqBand(type) : () => Telemetry.lockedTap('eq_no_dsp'),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 150),
                 padding:

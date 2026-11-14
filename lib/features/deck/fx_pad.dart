@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:ol1n_telemetry/ol1n_telemetry.dart';
 
 import '../../app/theme.dart';
 import '../../models/deck_config.dart';
@@ -73,7 +74,9 @@ class _FxSelector extends StatelessWidget {
           final selected = config.selectedFx == type;
           final available = enabled && cubit.fxAvailable(type);
           final chip = GestureDetector(
-            onTap: available ? () => cubit.selectFx(type) : null,
+            onTap: available
+                ? () => cubit.selectFx(type)
+                : () => Telemetry.lockedTap(cubit.fxLockReason(type) ?? 'fx_no_dsp'),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 150),
               margin: const EdgeInsets.only(right: 6),
