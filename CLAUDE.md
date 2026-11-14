@@ -66,3 +66,7 @@ lib/
 ## Platforms
 
 iOS, Android. (Docs list macOS as well — check pubspec for active targets.)
+
+## Telemetry
+
+- Anonymous usage statistics via `ol1n_telemetry` (git tag); dictionary in `lib/telemetry/telemetry_dictionary.dart` = `docs/telemetry.md`, guarded by `test/telemetry_test.dart`. Never put track, search, party or guest data in an event. Silent without `TELEMETRY_KEY`/`TELEMETRY_HOST`; goes to StoreMetrics, never through the relay.

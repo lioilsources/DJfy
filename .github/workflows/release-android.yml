@@ -59,7 +59,9 @@ jobs:
           SC_CLIENT_ID: ${{ secrets.SC_CLIENT_ID }}
           SC_CLIENT_SECRET: ${{ secrets.SC_CLIENT_SECRET }}
           GETSONGBPM_KEY: ${{ secrets.GETSONGBPM_KEY }}
-        run: flutter build appbundle --release --dart-define=LASTFM_API_KEY="$LASTFM_API_KEY" --dart-define=SC_CLIENT_ID="$SC_CLIENT_ID" --dart-define=SC_CLIENT_SECRET="$SC_CLIENT_SECRET" --dart-define=GETSONGBPM_KEY="$GETSONGBPM_KEY"
+          TELEMETRY_KEY: ${{ secrets.TELEMETRY_KEY }}
+          TELEMETRY_HOST: ${{ secrets.TELEMETRY_HOST }}
+        run: flutter build appbundle --release --dart-define=LASTFM_API_KEY="$LASTFM_API_KEY" --dart-define=SC_CLIENT_ID="$SC_CLIENT_ID" --dart-define=SC_CLIENT_SECRET="$SC_CLIENT_SECRET" --dart-define=GETSONGBPM_KEY="$GETSONGBPM_KEY" --dart-define=TELEMETRY_KEY="$TELEMETRY_KEY" --dart-define=TELEMETRY_HOST="$TELEMETRY_HOST"
 
       - name: Build release APK
         working-directory: .
@@ -68,7 +70,9 @@ jobs:
           SC_CLIENT_ID: ${{ secrets.SC_CLIENT_ID }}
           SC_CLIENT_SECRET: ${{ secrets.SC_CLIENT_SECRET }}
           GETSONGBPM_KEY: ${{ secrets.GETSONGBPM_KEY }}
-        run: flutter build apk --release --dart-define=LASTFM_API_KEY="$LASTFM_API_KEY" --dart-define=SC_CLIENT_ID="$SC_CLIENT_ID" --dart-define=SC_CLIENT_SECRET="$SC_CLIENT_SECRET" --dart-define=GETSONGBPM_KEY="$GETSONGBPM_KEY"
+          TELEMETRY_KEY: ${{ secrets.TELEMETRY_KEY }}
+          TELEMETRY_HOST: ${{ secrets.TELEMETRY_HOST }}
+        run: flutter build apk --release --dart-define=LASTFM_API_KEY="$LASTFM_API_KEY" --dart-define=SC_CLIENT_ID="$SC_CLIENT_ID" --dart-define=SC_CLIENT_SECRET="$SC_CLIENT_SECRET" --dart-define=GETSONGBPM_KEY="$GETSONGBPM_KEY" --dart-define=TELEMETRY_KEY="$TELEMETRY_KEY" --dart-define=TELEMETRY_HOST="$TELEMETRY_HOST" --dart-define=TESTER_BUILD=true
 
       - name: Verify APK signing certificate
         run: |

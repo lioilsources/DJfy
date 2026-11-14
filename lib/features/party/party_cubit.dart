@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:ol1n_telemetry/ol1n_telemetry.dart';
 
 import '../../core/smart_queue.dart';
 import '../../models/party.dart';
@@ -9,6 +10,7 @@ import '../../models/track.dart';
 import '../../services/bpm_service.dart';
 import '../../services/relay_client.dart';
 import '../../services/soundcloud_service.dart';
+import '../../telemetry/telemetry_dictionary.dart';
 import 'auto_picker.dart';
 import 'party_player.dart';
 import 'party_state.dart';
@@ -45,6 +47,11 @@ class PartyCubit extends Cubit<PartyState> {
   int _pickGen = 0;
   DateTime? _nextPick;
   Timer? _pickRetryTimer;
+
+  // Statistics of this party: counts only, never tracks, names or ids.
+  TelemetryFlow? _flow;
+  final Stopwatch _flowClock = Stopwatch();
+  int _statTracks = 0, _statHostTracks = 0, _statGuestTracks = 0, _statAutoTracks = 0, _statVotes = 0;
 
   /// Vetoed or unplayable tracks; never picked again this party.
   final Set<String> _rejected = {};
@@ -85,6 +92,7 @@ class PartyCubit extends Cubit<PartyState> {
   // ── Session lifecycle ──────────────────────────────────────────────────────
 
   Future<void> start(String name) async {
+    _startStats();
     emit(state.copyWith(phase: PartyPhase.starting, name: name.trim().isEmpty ? 'Party' : name.trim()));
     try {
       final s = await _relay.createSession();
@@ -98,16 +106,21 @@ class PartyCubit extends Cubit<PartyState> {
           })
           .listen(_onRelayEvent, onError: (Object e) {
             if (!isClosed) emit(state.copyWith(phase: PartyPhase.error, message: e.toString()));
+            _endStats('error');
+            Telemetry.errorShown('relay');
           });
       _heartbeat = Timer.periodic(const Duration(seconds: 10), (_) => _schedulePublish());
       _publish();
     } catch (e) {
       emit(state.copyWith(phase: PartyPhase.error, message: 'Relay nedostupný: $e'));
+      _endStats('error');
+      Telemetry.errorShown('relay');
     }
   }
 
   Future<void> end() async {
     final code = state.code, token = _token;
+    _endStats('ok');
     await _teardown();
     if (code != null && token != null) {
       unawaited(_relay.endSession(code, token).catchError((_) {}));
@@ -215,6 +228,7 @@ class PartyCubit extends Cubit<PartyState> {
     }
     final name = state.guests[guestId]?.name ?? 'Host';
     final entry = await _addEntry(track, proposedBy: guestId, proposedByName: name);
+    _statGuestTracks++;
     final blocked = state.ranked.firstWhere((s) => s.entry.id == entry.id).blocked;
     _send(
       guestId,
@@ -227,6 +241,7 @@ class PartyCubit extends Cubit<PartyState> {
   void _vote(String guestId, String? entryId, int value) {
     if (entryId == null) return;
     final v = value.clamp(-1, 1);
+    _statVotes++;
     _updateQueue([
       for (final e in state.queue)
         if (e.id == entryId)
@@ -241,6 +256,7 @@ class PartyCubit extends Cubit<PartyState> {
   Future<void> addTrack(Track track) async {
     if (state.queue.any((e) => e.track.id == track.id)) return;
     await _addEntry(track, proposedByName: 'Hostitel');
+    _statHostTracks++;
   }
 
   Future<QueueEntry> _addEntry(Track track, {String? proposedBy, required String proposedByName}) async {
@@ -304,17 +320,20 @@ class PartyCubit extends Cubit<PartyState> {
   void toggleCoDj(String guestId) {
     final g = state.guests[guestId];
     if (g == null) return;
+    if (!g.isCoDj) Telemetry.feature('co_dj');
     emit(state.copyWith(guests: {...state.guests, guestId: g.copyWith(isCoDj: !g.isCoDj)}));
     _send(guestId, _toastMsg(g.isCoDj ? 'Už nejsi co-DJ' : 'Hostitel tě povýšil na co-DJ 🎧'));
     _rerank();
   }
 
   void setMoodLock(MoodLock? lock) {
+    if (lock != null) Telemetry.feature('mood_lock');
     emit(lock == null ? state.copyWith(clearMoodLock: true) : state.copyWith(moodLock: lock));
     _rerank();
   }
 
   void setAutoDj(bool on) {
+    if (on) Telemetry.feature('auto_dj');
     _player.autoDj = on;
     emit(state.copyWith(autoDj: on));
     _schedulePublish();
@@ -374,6 +393,7 @@ class PartyCubit extends Cubit<PartyState> {
     if (track != null) {
       _nextPick = null;
       _enqueue(track, proposedByName: _autoName, isAuto: true);
+      _statAutoTracks++;
       return;
     }
     _nextPick = _now().add(_pickRetry);
@@ -389,6 +409,7 @@ class PartyCubit extends Cubit<PartyState> {
   void _onQueueEmpty() {
     if (!_canPick) {
       _toast('Fronta je prázdná');
+      Telemetry.errorShown('queue_empty');
       return;
     }
     _starved = true; // Next was pressed: start the pick as soon as it's in
@@ -413,6 +434,7 @@ class PartyCubit extends Cubit<PartyState> {
   void _onStarted(Track track) {
     if (isClosed) return;
     _starved = false;
+    _statTracks++;
     _pushHistory();
     final entry = state.queue.where((e) => e.track.id == track.id).firstOrNull;
     emit(state.copyWith(
@@ -429,6 +451,7 @@ class PartyCubit extends Cubit<PartyState> {
     _rejected.add(track.id);
     _dropTrack(track);
     _toast('Nejde přehrát „${track.title}“ – přeskakuju');
+    Telemetry.errorShown('party_track');
   }
 
   void _dropTrack(Track track) {
@@ -457,6 +480,38 @@ class PartyCubit extends Cubit<PartyState> {
     emit(from == null || to == null
         ? state.copyWith(clearTransition: true)
         : state.copyWith(transition: (from: from, to: to)));
+  }
+
+  // ── Statistics ─────────────────────────────────────────────────────────────
+
+  void _startStats() {
+    _endStats('cancel');
+    _statTracks = _statHostTracks = _statGuestTracks = _statAutoTracks = _statVotes = 0;
+    _flowClock
+      ..reset()
+      ..start();
+    Telemetry.feature('party');
+    _flow = Telemetry.flow('party', const {}, _statProps);
+    telemetryMode = 'party';
+  }
+
+  /// A party mostly runs with the screen locked, so `secs` is wall time,
+  /// not the flow's foreground seconds.
+  Map<String, Object> _statProps() => {
+        'secs': _flowClock.elapsed.inSeconds.clamp(0, 86400),
+        'guests': state.guests.length,
+        'tracks': _statTracks,
+        'host_tracks': _statHostTracks,
+        'guest_tracks': _statGuestTracks,
+        'auto_tracks': _statAutoTracks,
+        'votes': _statVotes,
+      };
+
+  void _endStats(String result) {
+    _flow?.end(result, _statProps());
+    _flow = null;
+    _flowClock.stop();
+    telemetryMode = 'solo';
   }
 
   // ── Ranking & publishing ───────────────────────────────────────────────────
@@ -548,6 +603,7 @@ class PartyCubit extends Cubit<PartyState> {
 
   @override
   Future<void> close() async {
+    _endStats('cancel');
     await _teardown();
     await _player.dispose();
     return super.close();

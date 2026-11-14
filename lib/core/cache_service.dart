@@ -3,11 +3,13 @@ import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart' as p;
 
 class CacheService {
+  static const fileName = 'bpm_cache.db';
+
   late Database _db;
 
   Future<void> init() async {
     final dir = await getApplicationDocumentsDirectory();
-    final path = p.join(dir.path, 'bpm_cache.db');
+    final path = p.join(dir.path, fileName);
     _db = await openDatabase(
       path,
       version: 1,
