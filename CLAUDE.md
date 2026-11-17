@@ -8,11 +8,12 @@ Flutter mobile DJ app with smart playlist generation. Integrates Last.fm (scrobb
 
 ```bash
 flutter pub get
+flutter analyze --no-fatal-infos && flutter test   # CI gate (.github/workflows/ci.yml)
+cd services/djfy && go test ./...                  # party relay
 flutter run -d ios
 flutter run -d android
 flutter build ios
 flutter build apk
-flutter analyze
 ```
 
 ## Architecture
@@ -24,13 +25,15 @@ lib/
 │   ├── app.dart             # App root
 │   └── theme.dart
 ├── features/
-│   ├── deck/                # DJ deck UI (turntable, controls)
-│   ├── playlist/            # Smart playlist management
-│   ├── search/              # Track search
-│   ├── library/             # Local/saved library
-│   └── settings/
-├── models/                  # Track, playlist, deck state models
-└── (core/, services/?)      # API clients, audio engine
+│   ├── deck/                # DJ deck UI (turntable, controls, FX pad, waveform)
+│   ├── mixer/               # Crossfader / mixer cubit
+│   ├── party/               # Party mode (see below)
+│   └── playlist/            # Smart playlist management
+├── models/                  # Track, playlist, deck config, FX, party models
+├── core/                    # Platter, beat clock, smart queue, scratch renderer, cache
+└── services/                # API clients (Last.fm, GetSongBPM, SoundCloud, Jamendo), audio engine, relay client
+packages/djfy_decoder/       # MP3 → PCM decoder plugin (dr_mp3 via FFI)
+services/djfy/               # Go party relay + embedded guest PWA
 ```
 
 ## External APIs
@@ -40,6 +43,7 @@ lib/
 | Last.fm | Track recommendations, scrobbling |
 | GetSongBPM | BPM data for tempo matching |
 | SoundCloud | Track streaming |
+| Jamendo | Track streaming (`lib/services/jamendo_service.dart`) |
 
 ## Audio
 
@@ -61,8 +65,8 @@ lib/
 - `lib/features/party/auto_picker.dart`: when no playable track is left ~90 s before the end (or after Next on an empty queue), adds one `🤖 Auto` track: Last.fm similar → artist top tracks → SoundCloud by artist → replay from history. Auto entries rank after anything people added; vetoed or failed tracks are never picked again that party. Switch `NEKONČIT`, on by default.
 - `lib/core/smart_queue.dart`: score = votes × freshness × BPM compatibility × mood lock; pinned entries first.
 - Guests reference tracks only by id from the host's own search results (no injected URLs).
-- Relay URL: `--dart-define=DJFY_RELAY_URL=…` (default `https://djfy.ol1n.com`); relay port 8097 (8095 is taken by webtoon).
+- Relay URL: `--dart-define=DJFY_RELAY_URL=…` (default `https://djfy.ol1n.com`); relay listens on `DJFY_ADDR` (default `:8097`).
 
 ## Platforms
 
-iOS, Android. (Docs list macOS as well — check pubspec for active targets.)
+iOS, Android, macOS (release workflows in `.github/workflows/release-*.yml`).
