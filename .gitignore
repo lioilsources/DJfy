@@ -16,3 +16,17 @@ build/
 # macOS
 .DS_Store
 env.json
+# devconv:start
+.env.*
+!.env.example
+*.p8
+*.p12
+*.jks
+key.properties
+.claude/settings.local.json
+CLAUDE.local.md
+lib/**/secrets.dart
+bin/
+*.test
+*.out
+# devconv:end
