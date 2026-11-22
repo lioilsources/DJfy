@@ -10,6 +10,10 @@ on:
         description: 'Existing release tag to build and attach the APK/AAB to (e.g. v1.4.1); empty = build the selected branch'
         required: false
         default: ''
+      flutter:
+        description: 'Flutter version for that tag (an old tag may need the Flutter it was released with, e.g. 3.41.x for v1.4.1)'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -34,7 +38,7 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.50.x'
+          flutter-version: ${{ inputs.flutter || '3.50.x' }}
           channel: stable
           cache: true
 
