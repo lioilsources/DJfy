@@ -4,7 +4,7 @@ import '../models/fx.dart';
 
 /// The app version this build reports; `test/telemetry_test.dart` keeps it
 /// equal to `version:` in `pubspec.yaml`.
-const kAppVersion = '1.4.0';
+const kAppVersion = '1.4.1';
 
 /// The app id at the collector (`apps.yaml` in StoreMetrics).
 const kTelemetryApp = 'djfy';
