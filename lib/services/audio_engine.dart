@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
 import 'dart:math' as math;
@@ -188,13 +189,23 @@ class AudioEngine {
     _disposeDsp(deckId);
     final seq = _loadSeq[deckId] = (_loadSeq[deckId] ?? 0) + 1;
 
-    if (progressiveUrl != null && progressiveUrl.isNotEmpty && !isHlsUrl(progressiveUrl)) {
+    final mp3 = progressiveUrl != null && progressiveUrl.isNotEmpty && !isHlsUrl(progressiveUrl)
+        ? progressiveUrl
+        : null;
+    // SoundCloud stopped serving progressive MP3s; its MP3 HLS segments are
+    // plain MP3 slices, so the whole track can still be fetched and decoded.
+    final fetch = mp3 != null
+        ? () => _download(mp3)
+        : isMp3Hls(hlsUrl)
+            ? () => _downloadHls(hlsUrl)
+            : null;
+    if (fetch != null) {
       final voices = _dsp.values.where((d) => d.voice != null).length;
       final deadline = streaming ? streamingVoiceDeadline : _downloadTimeout;
-      if (voices < maxVoices && await _loadViaVoice(deckId, progressiveUrl, seq, deadline)) return true;
+      if (voices < maxVoices && await _loadViaVoice(deckId, fetch, seq, deadline)) return true;
       if (_loadSeq[deckId] != seq) throw LoadSuperseded();
-      if (!streaming && await _loadViaSoLoud(deckId, progressiveUrl)) return true;
     }
+    if (mp3 != null && !streaming && await _loadViaSoLoud(deckId, mp3)) return true;
     await _loadViaJustAudio(deckId, hlsUrl);
     return false;
   }
@@ -202,6 +213,9 @@ class AudioEngine {
   /// SoundCloud's "progressive" CDN URL is sometimes an HLS playlist
   /// (`…/playlist/…`), which SoLoud can't decode — it hangs instead.
   static bool isHlsUrl(String url) => url.contains('.m3u8') || url.contains('hls') || url.contains('/playlist');
+
+  /// An HLS playlist of MP3 segments (SoundCloud's `hls_mp3_128`), not AAC.
+  static bool isMp3Hls(String url) => isHlsUrl(url) && Uri.parse(url).path.contains('.mp3');
 
   static const _soloudLoadTimeout = Duration(seconds: 10);
 
@@ -218,10 +232,10 @@ class AudioEngine {
     await player.setVolume(_effectiveVolume(deckId));
   }
 
-  Future<bool> _loadViaVoice(int deckId, String url, int seq, Duration deadline) async {
+  Future<bool> _loadViaVoice(int deckId, Future<Uint8List> Function() fetch, int seq, Duration deadline) async {
     try {
       final sw = Stopwatch()..start();
-      final bytes = await _download(url).timeout(deadline);
+      final bytes = await fetch().timeout(deadline);
       final downloaded = sw.elapsedMilliseconds;
       final pcm = await decodeMp3(bytes).timeout(deadline - sw.elapsed);
       if (_loadSeq[deckId] != seq) throw LoadSuperseded();
@@ -274,20 +288,65 @@ class AudioEngine {
   /// Waveform and onsets of a PCM deck's track; null for other decks.
   Future<TrackAnalysis?> analysis(int deckId) => _dsp[deckId]?.analysis ?? Future.value();
 
-  static Future<Uint8List> _download(String url) async {
-    final client = HttpClient();
+  static Future<Uint8List> _download(String url, {HttpClient? client, int limit = _maxDownloadBytes}) async {
+    final http = client ?? HttpClient();
     try {
-      final res = await (await client.getUrl(Uri.parse(url))).close();
+      final res = await (await http.getUrl(Uri.parse(url))).close();
       if (res.statusCode != 200) throw HttpException('HTTP ${res.statusCode}', uri: Uri.parse(url));
       final out = BytesBuilder(copy: false);
       await for (final chunk in res) {
         out.add(chunk);
-        if (out.length > _maxDownloadBytes) throw const HttpException('track too large');
+        if (out.length > limit) throw const HttpException('track too large');
+      }
+      return out.takeBytes();
+    } finally {
+      if (client == null) http.close(force: true);
+    }
+  }
+
+  static const _hlsParallel = 6;
+
+  /// The whole track behind an MP3 HLS playlist: its segments downloaded a
+  /// few at a time (one by one took 13 s for 5 min) and joined in order.
+  static Future<Uint8List> _downloadHls(String url) async {
+    final playlist = utf8.decode(await _download(url, limit: 1 << 20));
+    final segments = hlsSegments(playlist, Uri.parse(url));
+    if (segments.isEmpty) throw const FormatException('empty or encrypted HLS playlist');
+    final client = HttpClient();
+    try {
+      final parts = List<Uint8List?>.filled(segments.length, null);
+      var next = 0, total = 0;
+      Future<void> worker() async {
+        while (next < segments.length) {
+          final i = next++;
+          final part = await _download(segments[i].toString(), client: client);
+          total += part.length;
+          if (total > _maxDownloadBytes) throw const HttpException('track too large');
+          parts[i] = part;
+        }
+      }
+
+      await Future.wait([for (var w = 0; w < _hlsParallel; w++) worker()]);
+      final out = BytesBuilder(copy: false);
+      for (final part in parts) {
+        out.add(part!);
       }
       return out.takeBytes();
     } finally {
       client.close(force: true);
     }
+  }
+
+  /// Segment URLs of a media playlist, resolved against [base]. Empty when
+  /// the segments are encrypted (we can't decode those).
+  @visibleForTesting
+  static List<Uri> hlsSegments(String playlist, Uri base) {
+    final lines = const LineSplitter().convert(playlist).map((l) => l.trim());
+    if (lines.any((l) => l.startsWith('#EXT-X-KEY') && !l.contains('METHOD=NONE'))) return const [];
+    return [
+      for (final l in lines)
+        if (l.isNotEmpty && !l.startsWith('#')) base.resolve(l),
+    ];
   }
 
   /// Filters must be activated BEFORE play(): filter instances are cloned

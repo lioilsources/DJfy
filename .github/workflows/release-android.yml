@@ -5,6 +5,15 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing release tag to build and attach the APK/AAB to (e.g. v1.4.1); empty = build the selected branch'
+        required: false
+        default: ''
+      flutter:
+        description: 'Flutter version for that tag (an old tag may need the Flutter it was released with, e.g. 3.41.x for v1.4.1)'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -17,6 +26,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag || github.ref }}
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -27,6 +38,7 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
+          flutter-version: ${{ inputs.flutter || '3.50.x' }}
           channel: stable
           cache: true
 
@@ -81,19 +93,20 @@ jobs:
           $ANDROID_HOME/build-tools/$(ls $ANDROID_HOME/build-tools | sort -V | tail -1)/apksigner verify --print-certs "$APK" | head -20
 
       - name: Upload to GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/') || inputs.tag != ''
         continue-on-error: true
         uses: softprops/action-gh-release@v2
         with:
           files: |
             ./build/app/outputs/bundle/release/app-release.aab
             ./build/app/outputs/flutter-apk/app-release.apk
-          name: DJfy ${{ github.ref_name }}
-          tag_name: ${{ github.ref_name }}
+          name: DJfy ${{ inputs.tag || github.ref_name }}
+          tag_name: ${{ inputs.tag || github.ref_name }}
           draft: false
-          prerelease: true
+          prerelease: ${{ inputs.tag == '' }}  # don't demote an existing release
 
       - name: Upload to Firebase App Distribution
+        if: inputs.tag == ''  # a re-run for an old tag was already distributed
         uses: wzieba/Firebase-Distribution-Github-Action@v1
         with:
           appId: ${{ secrets.FIREBASE_ANDROID_APP_ID }}

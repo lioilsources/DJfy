@@ -128,7 +128,7 @@ class DeckCubit extends Cubit<DeckState> {
     _endLoadFlow('cancel');
     if (!streaming && track.soundcloudStreamUrl == null) {
       Telemetry.flow('track_load', {'source': _source}).end('no_stream', const {'engine': 'none'});
-      emit(DeckError(state.config, 'Žádný stream URL'));
+      emit(DeckError(state.config, 'Skladba není na SoundCloudu'));
       Telemetry.errorShown('no_stream');
       return;
     }

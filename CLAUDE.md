@@ -8,11 +8,12 @@ Flutter mobile DJ app with smart playlist generation. Integrates Last.fm (scrobb
 
 ```bash
 flutter pub get
+flutter analyze --no-fatal-infos && flutter test   # CI gate (.github/workflows/ci.yml)
+cd services/djfy && go test ./...                  # party relay
 flutter run -d ios
 flutter run -d android
 flutter build ios
 flutter build apk
-flutter analyze
 ```
 
 ## Architecture
@@ -24,13 +25,15 @@ lib/
 │   ├── app.dart             # App root
 │   └── theme.dart
 ├── features/
-│   ├── deck/                # DJ deck UI (turntable, controls)
-│   ├── playlist/            # Smart playlist management
-│   ├── search/              # Track search
-│   ├── library/             # Local/saved library
-│   └── settings/
-├── models/                  # Track, playlist, deck state models
-└── (core/, services/?)      # API clients, audio engine
+│   ├── deck/                # DJ deck UI (turntable, controls, FX pad, waveform)
+│   ├── mixer/               # Crossfader / mixer cubit
+│   ├── party/               # Party mode (see below)
+│   └── playlist/            # Smart playlist management
+├── models/                  # Track, playlist, deck config, FX, party models
+├── core/                    # Platter, beat clock, smart queue, scratch renderer, cache
+└── services/                # API clients (Last.fm, GetSongBPM, SoundCloud, Jamendo), audio engine, relay client
+packages/djfy_decoder/       # MP3 → PCM decoder plugin (dr_mp3 via FFI)
+services/djfy/               # Go party relay + embedded guest PWA
 ```
 
 ## External APIs
@@ -40,10 +43,11 @@ lib/
 | Last.fm | Track recommendations, scrobbling |
 | GetSongBPM | BPM data for tempo matching |
 | SoundCloud | Track streaming |
+| Jamendo | Track streaming (`lib/services/jamendo_service.dart`) |
 
 ## Audio
 
-- Engine (`lib/services/audio_engine.dart`), three paths: progressive MP3 → downloaded, decoded to PCM (`packages/djfy_decoder`, dr_mp3 via FFI) and played by a `ScratchVoice` (our own playhead, `lib/core/scratch_renderer.dart`, into a SoLoud buffer stream: scratch, backwards, sample-accurate loops, filters); if decoding fails → SoLoud `loadUrl` (DSP, no reverse); HLS → `just_audio` (no DSP). Max 4 PCM decks (~10 MB per minute of track). Party loads take PCM only if it's ready within 8 s.
+- Engine (`lib/services/audio_engine.dart`), three paths: progressive MP3, or SoundCloud's MP3 HLS (it no longer serves progressive MP3s; `/streams` only has `hls_mp3_128_url`, so the segments are fetched 6 at a time and joined) → downloaded, decoded to PCM (`packages/djfy_decoder`, dr_mp3 via FFI) and played by a `ScratchVoice` (our own playhead, `lib/core/scratch_renderer.dart`, into a SoLoud buffer stream: scratch, backwards, sample-accurate loops, filters); if decoding fails → SoLoud `loadUrl` (DSP, no reverse); AAC HLS or a failed download → `just_audio` (no DSP). Max 4 PCM decks (~10 MB per minute of track). Party loads take PCM only if it's ready within 8 s.
 - SoLoud mixer runs at 512 frames (`AudioEngine.mixerBufferFrames`): the 2048 default adds ~46 ms to every touch.
 - `ScratchVoice` keeps 40–120 ms of audio ahead of what SoLoud has played (1.5 s in the background). Never `setPause` a buffer-stream voice (SoLoud toggles it while buffering); data must be added after `play()`; after an underrun the stream stays paused until more data arrives. Spike numbers and the open device check (60 ms limit, else move the producer to C) are in `Prompts/05-SCRATCH_DECK_AND_FX.md`.
 - Platter (`lib/core/platter.dart`): 33⅓ rpm, one turn = 1.8 s of track; touch stops the record, the finger's speed is the playback rate, release spins up (τ 0.1 s), brake/backspin coast. `AudioEngine.setRate` is signed; decks that can't reverse are muted when held and pulled back with seeks.
@@ -61,11 +65,11 @@ lib/
 - `lib/features/party/auto_picker.dart`: when no playable track is left ~90 s before the end (or after Next on an empty queue), adds one `🤖 Auto` track: Last.fm similar → artist top tracks → SoundCloud by artist → replay from history. Auto entries rank after anything people added; vetoed or failed tracks are never picked again that party. Switch `NEKONČIT`, on by default.
 - `lib/core/smart_queue.dart`: score = votes × freshness × BPM compatibility × mood lock; pinned entries first.
 - Guests reference tracks only by id from the host's own search results (no injected URLs).
-- Relay URL: `--dart-define=DJFY_RELAY_URL=…` (default `https://djfy.ol1n.com`); relay port 8097 (8095 is taken by webtoon).
+- Relay URL: `--dart-define=DJFY_RELAY_URL=…` (default `https://djfy.ol1n.com`); relay listens on `DJFY_ADDR` (default `:8097`).
 
 ## Platforms
 
-iOS, Android. (Docs list macOS as well — check pubspec for active targets.)
+iOS, Android, macOS (release workflows in `.github/workflows/release-*.yml`).
 
 ## Telemetry
 
