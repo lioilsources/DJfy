@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get_it/get_it.dart';
+import 'package:ol1n_telemetry/ol1n_telemetry.dart';
 import '../features/deck/deck_cubit.dart';
 import '../features/deck/deck_registry.dart';
 import '../features/deck/deck_screen.dart';
@@ -16,7 +17,9 @@ import '../services/audio_engine.dart';
 import '../services/bpm_service.dart';
 import '../services/lastfm_service.dart';
 import '../services/relay_client.dart';
+import '../features/settings/settings_screen.dart';
 import '../services/soundcloud_service.dart';
+import '../telemetry/telemetry_dictionary.dart';
 import 'theme.dart';
 
 class DjDeckifyApp extends StatelessWidget {
@@ -28,6 +31,7 @@ class DjDeckifyApp extends StatelessWidget {
       title: 'DJ Deckify',
       theme: djTheme,
       debugShowCheckedModeBanner: false,
+      navigatorObservers: [TelemetryNavigatorObserver(kScreenRoutes)],
       home: MultiBlocProvider(
         providers: [
           BlocProvider(
@@ -81,6 +85,16 @@ class _HomeScreen extends StatelessWidget {
               style: TextStyle(color: kNeonPurple, letterSpacing: 1.5),
             ),
           ),
+          // Only setting today is the statistics switch: no key, no screen.
+          if (Telemetry.isConfigured)
+            IconButton(
+              tooltip: 'Nastavení',
+              icon: const Icon(Icons.settings, size: 18),
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                settings: const RouteSettings(name: SettingsScreen.routeName),
+                builder: (_) => const SettingsScreen(),
+              )),
+            ),
           Padding(
             padding: const EdgeInsets.only(right: 12),
             child: Center(
@@ -106,6 +120,7 @@ class _HomeScreen extends StatelessWidget {
 void _openParty(BuildContext context) {
   final party = context.read<PartyCubit>();
   Navigator.of(context).push(MaterialPageRoute(
+    settings: const RouteSettings(name: PartyScreen.routeName),
     builder: (_) => BlocProvider.value(
       value: party,
       child: const PartyScreen(),

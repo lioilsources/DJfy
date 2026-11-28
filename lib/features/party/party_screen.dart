@@ -18,6 +18,8 @@ import 'party_state.dart';
 class PartyScreen extends StatelessWidget {
   const PartyScreen({super.key});
 
+  static const routeName = '/party';
+
   @override
   Widget build(BuildContext context) {
     return BlocConsumer<PartyCubit, PartyState>(

@@ -70,3 +70,7 @@ services/djfy/               # Go party relay + embedded guest PWA
 ## Platforms
 
 iOS, Android, macOS (release workflows in `.github/workflows/release-*.yml`).
+
+## Telemetry
+
+- Anonymous usage statistics via `ol1n_telemetry` (git tag); dictionary in `lib/telemetry/telemetry_dictionary.dart` = `docs/telemetry.md`, guarded by `test/telemetry_test.dart`. Never put track, search, party or guest data in an event. Silent without `TELEMETRY_KEY`/`TELEMETRY_HOST`; goes to StoreMetrics, never through the relay.
